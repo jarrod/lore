@@ -1,0 +1,91 @@
+import { existsSync } from "node:fs";
+import { mkdir, readFile, realpath, rename, unlink } from "node:fs/promises";
+import path from "node:path";
+import { openDatabase } from "../index/database";
+import { refreshIndex } from "../index/refresh";
+import { splitDocument, serializeDocument, type Frontmatter } from "../okf/frontmatter";
+import { conceptPath } from "../okf/ids";
+import { extractTypedEdges } from "../okf/markdown";
+import { conflict, invalidArgument, invalidOkf, notFound } from "../protocol/errors";
+import { ensureNoArgs } from "../commands/options";
+
+interface PutRequest {
+  mode?: "create" | "merge" | "replace";
+  frontmatter?: Frontmatter;
+  body?: string;
+  body_file?: string;
+  relations?: unknown;
+  expected_hash?: string;
+  allow_destructive?: boolean;
+}
+
+export async function runPut(bundle: string, args: string[]): Promise<unknown> {
+  const id = args.shift();
+  if (!id) throw invalidArgument("put requires a concept ID");
+  ensureNoArgs(args);
+  let request: PutRequest;
+  try { request = JSON.parse(await Bun.stdin.text()) as PutRequest; }
+  catch { throw invalidArgument("put requires a valid JSON request on stdin"); }
+  if (!request || typeof request !== "object" || Array.isArray(request)) throw invalidArgument("put request must be an object");
+  if (request.body !== undefined && request.body_file !== undefined) throw invalidArgument("body and body_file are mutually exclusive");
+  if (request.body !== undefined && typeof request.body !== "string") throw invalidArgument("body must be a string");
+  if (request.body_file !== undefined && typeof request.body_file !== "string") throw invalidArgument("body_file must be a string");
+  if (request.frontmatter !== undefined && (!request.frontmatter || typeof request.frontmatter !== "object" || Array.isArray(request.frontmatter))) throw invalidArgument("frontmatter must be an object");
+  const mode = request.mode ?? "merge";
+  if (!(["create", "merge", "replace"] as string[]).includes(mode)) throw invalidArgument("Invalid put mode", { mode });
+  const destination = conceptPath(bundle, id);
+  const exists = existsSync(destination);
+  if (mode === "create" && exists) throw conflict("Concept already exists", { id });
+  if (mode === "replace" && !exists) throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id });
+  if (mode === "replace" && request.allow_destructive !== true) throw conflict("replace requires allow_destructive=true", { id });
+  let current: { frontmatter: Frontmatter; body: string; hash: string } | undefined;
+  if (exists) {
+    const content = await readFile(destination, "utf8");
+    const parsed = splitDocument(content, id);
+    current = { ...parsed, hash: new Bun.CryptoHasher("sha256").update(content).digest("hex") };
+    if (request.expected_hash !== undefined && request.expected_hash !== current.hash) throw conflict("Concept hash does not match", { id, expected_hash: request.expected_hash, actual_hash: current.hash });
+  }
+  const suppliedBody = request.body_file !== undefined ? await readBodyFile(request.body_file) : request.body;
+  let frontmatter: Frontmatter;
+  let body: string;
+  if (mode === "replace") {
+    if (!request.frontmatter || suppliedBody === undefined) throw invalidArgument("replace requires complete frontmatter and body content");
+    frontmatter = { ...request.frontmatter };
+    body = suppliedBody;
+  } else {
+    frontmatter = { ...(current?.frontmatter ?? {}), ...(request.frontmatter ?? {}) };
+    body = suppliedBody ?? current?.body ?? "";
+  }
+  if (request.relations !== undefined) {
+    if (!Array.isArray(request.relations)) throw invalidArgument("relations must be an array");
+    const existingX = frontmatter["x-okf"];
+    const x = existingX && typeof existingX === "object" && !Array.isArray(existingX) ? { ...(existingX as Record<string, unknown>) } : {};
+    x.rel = request.relations;
+    frontmatter["x-okf"] = x;
+  }
+  if (typeof frontmatter.type !== "string" || !frontmatter.type.trim()) throw invalidOkf("Resulting concept requires a non-empty type", { id });
+  try { extractTypedEdges(frontmatter); } catch (error) { throw invalidOkf("Resulting concept has malformed x-okf.rel", { id, reason: String(error) }); }
+  const content = serializeDocument(frontmatter, body);
+  splitDocument(content, id);
+  await mkdir(path.dirname(destination), { recursive: true });
+  const realParent = await realpath(path.dirname(destination));
+  const bundlePrefix = bundle.endsWith(path.sep) ? bundle : `${bundle}${path.sep}`;
+  if (realParent !== bundle && !realParent.startsWith(bundlePrefix)) throw invalidArgument("Concept path escapes bundle through a symbolic link", { id });
+  const temporary = `${destination}.lore-${process.pid}-${crypto.randomUUID()}.tmp`;
+  try {
+    await Bun.write(temporary, content);
+    await rename(temporary, destination);
+  } catch (error) {
+    if (existsSync(temporary)) await unlink(temporary);
+    throw error;
+  }
+  const { db } = openDatabase(bundle);
+  try { await refreshIndex(db, bundle); } finally { db.close(); }
+  const hash = new Bun.CryptoHasher("sha256").update(content).digest("hex");
+  return { id, mode, created: !exists, hash };
+}
+
+async function readBodyFile(file: string): Promise<string> {
+  try { return await readFile(path.resolve(process.cwd(), file), "utf8"); }
+  catch { throw invalidArgument("body_file could not be read", { body_file: file }); }
+}

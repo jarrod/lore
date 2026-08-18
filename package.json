@@ -1,0 +1,22 @@
+{
+  "name": "lore",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "lore": "./src/cli.ts"
+  },
+  "scripts": {
+    "lore": "bun run src/cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build --compile --outfile dist/lore src/cli.ts",
+    "build:targets": "bun scripts/build-targets.ts",
+    "smoke": "bun test/smoke.ts",
+    "check": "bun run typecheck && bun test && bun run build && bun run smoke"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "typescript": "5.9.3"
+  }
+}
