@@ -78,6 +78,18 @@ bun run check
 
 `bun run build` produces a standalone `dist/lore` executable containing Bun and SQLite. End users do not need Bun, Node, npm, or SQLite installed.
 
+## Agent skill
+
+The canonical agent skill is versioned at [`skills/use-lore`](skills/use-lore). It teaches a skill-capable agent how to turn natural-language questions into focused Lore searches, retrieval, graph traversal, validation, and guarded mutations without duplicating Lore's deterministic behavior.
+
+Install the whole `skills/use-lore` directory into the target agent's skill search path, either by copying it or linking back to this checkout. For example:
+
+```bash
+cp -R skills/use-lore /path/to/agent/skills/use-lore
+```
+
+The skill and executable are separate deliverables. The target agent must also have the `lore` executable on `PATH`; a development agent working in this checkout can use `bun run src/cli.ts` instead.
+
 ## Releases
 
 Pull requests and pushes to `main` run the test, type-check, native-build, and compiled smoke-test workflow. They do not publish releases.

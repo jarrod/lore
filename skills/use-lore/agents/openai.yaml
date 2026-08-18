@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lore Knowledge"
+  short_description: "Query and safely update OKF knowledge bundles"
+  default_prompt: "Use $use-lore to investigate this knowledge bundle and explain what you find."
