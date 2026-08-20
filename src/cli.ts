@@ -9,6 +9,7 @@ import { commandHelp, globalHelp } from "./commands/help";
 import { runInit } from "./commands/init";
 import { requireCompiledExecutable } from "./runtime";
 import { TOOL_VERSION } from "./version";
+import { runVisualise } from "./commands/visualise";
 
 async function main(): Promise<never> {
   requireCompiledExecutable();
@@ -33,6 +34,7 @@ async function main(): Promise<never> {
     case "find": return writeSuccess(await runFind(bundle, parsed.args));
     case "get": return writeSuccess(await runGet(bundle, parsed.args));
     case "graph": return writeSuccess(await runGraph(bundle, parsed.args));
+    case "visualise": return writeSuccess(await runVisualise(bundle, parsed.args));
     case "put": return writeSuccess(await runPut(bundle, parsed.args));
     case "status": return writeSuccess(await runStatus(bundle, parsed.args));
     case "check": {

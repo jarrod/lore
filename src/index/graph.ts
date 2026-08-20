@@ -3,8 +3,26 @@ import { compareStrings } from "../okf/ids";
 
 export type Direction = "in" | "out" | "both";
 export interface GraphEdge { from: string; rel: string; to: string; origin: string }
+export interface GraphNode { id: string; type?: string; title?: string | null; status?: string | null; trust?: string; missing?: true }
 
-export function graphTraversal(db: Database, root: string, direction: Direction, depth: number, rel?: string): { nodes: unknown[]; edges: GraphEdge[] } {
+export function bundleGraph(db: Database, rel?: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const params = rel ? [rel] : [];
+  const edges = (db.query(`SELECT src,rel,dst,origin FROM edge${rel ? " WHERE rel = ?" : ""} ORDER BY src,rel,dst,origin`).all(...params) as Array<{
+    src: string; rel: string; dst: string; origin: string;
+  }>).map((row) => ({ from: row.src, rel: row.rel, to: row.dst, origin: row.origin }));
+  const selectedIds = rel ? new Set(edges.flatMap((edge) => [edge.from, edge.to])) : undefined;
+  const rows = db.query("SELECT id,type,title,status,trust FROM concept ORDER BY id").all() as GraphNode[];
+  const nodes = selectedIds ? rows.filter((node) => selectedIds.has(node.id)) : rows;
+  const known = new Set(rows.map((node) => node.id));
+  for (const edge of edges) {
+    if (!known.has(edge.from) && !nodes.some((node) => node.id === edge.from)) nodes.push({ id: edge.from, missing: true });
+    if (!known.has(edge.to) && !nodes.some((node) => node.id === edge.to)) nodes.push({ id: edge.to, missing: true });
+  }
+  nodes.sort((a, b) => compareStrings(a.id, b.id));
+  return { nodes, edges };
+}
+
+export function graphTraversal(db: Database, root: string, direction: Direction, depth: number, rel?: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const visited = new Set([root]);
   let frontier = [root];
   const edgeMap = new Map<string, GraphEdge>();
@@ -22,7 +40,7 @@ export function graphTraversal(db: Database, root: string, direction: Direction,
   return { nodes: nodeMetadata(db, [...visited]), edges: [...edgeMap.values()].sort(compareEdges) };
 }
 
-export function shortestPath(db: Database, from: string, to: string, rel?: string, maxDepth = 8): { found: boolean; nodes: unknown[]; edges: GraphEdge[] } {
+export function shortestPath(db: Database, from: string, to: string, rel?: string, maxDepth = 8): { found: boolean; nodes: GraphNode[]; edges: GraphEdge[] } {
   if (from === to) return { found: true, nodes: nodeMetadata(db, [from]), edges: [] };
   const visited = new Set([from]);
   let frontier = [from];
@@ -62,9 +80,9 @@ function adjacent(db: Database, id: string, direction: Direction, rel?: string):
   return rows.map((row) => ({ from: row.src, rel: row.rel, to: row.dst, origin: row.origin }));
 }
 
-function nodeMetadata(db: Database, ids: string[]): unknown[] {
+function nodeMetadata(db: Database, ids: string[]): GraphNode[] {
   const query = db.query("SELECT id,type,title,status,trust FROM concept WHERE id=?");
-  return ids.map((id) => query.get(id) ?? { id }).sort((a, b) => compareStrings(String((a as {id:string}).id), String((b as {id:string}).id)));
+  return ids.map((id): GraphNode => query.get(id) as GraphNode | null ?? { id, missing: true }).sort((a, b) => compareStrings(a.id, b.id));
 }
 
 function compareEdges(a: GraphEdge, b: GraphEdge): number {

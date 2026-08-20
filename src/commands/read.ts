@@ -26,7 +26,14 @@ export async function runInfo(bundle: string, args: string[]): Promise<unknown> 
       concepts: result.concepts,
       edges: result.edges,
       cache: { path: dbPath, current: true },
-      capabilities: { sqlite: true, fts5, bm25: fts5, typed_relations: true },
+      capabilities: {
+        sqlite: true,
+        fts5,
+        bm25: fts5,
+        typed_relations: true,
+        html_visualisation: true,
+        browser_open: ["darwin", "linux", "win32"].includes(process.platform),
+      },
     };
   } finally { db.close(); }
 }

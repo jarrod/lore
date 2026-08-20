@@ -86,7 +86,7 @@ function replaceFile(source: string, destination: string): void {
 }
 
 function ensureIgnoreFile(ignorePath: string): void {
-  const required = ["/bin/", "/cache/"];
+  const required = ["/bin/", "/cache/", "/visualisations/"];
   const existing = existsSync(ignorePath)
     ? readFileSync(ignorePath, "utf8").split(/\r?\n/).filter(Boolean)
     : [];

@@ -78,6 +78,22 @@ const commands: CommandHelp[] = [
     ],
   },
   {
+    name: "visualise",
+    usage: "lore visualise [<concept-id>] [--direction <in|out|both>] [--depth <1..8>] [--rel <relationship>] [--max-nodes <1..5000>] [--output <path>] [--open] [--bundle <path>]",
+    summary: "Generate a self-contained interactive HTML knowledge graph.",
+    arguments: [{ name: "concept-id", required: false, description: "Optional canonical root concept ID; omit it for the complete bundle." }],
+    options: [
+      { flag: "--direction", value: "<in|out|both>", description: "Choose rooted edge direction; defaults to both." },
+      { flag: "--depth", value: "<1..8>", description: "Choose rooted traversal depth; defaults to 1." },
+      { flag: "--rel", value: "<relationship>", description: "Restrict the visualisation to one relationship." },
+      { flag: "--max-nodes", value: "<1..5000>", description: "Refuse larger graphs; defaults to 500." },
+      { flag: "--output", value: "<path>", description: "Write to this file instead of .lore/visualisations/." },
+      { flag: "--open", description: "Open the generated file in the default browser." },
+      bundleOption,
+      helpOption(),
+    ],
+  },
+  {
     name: "put",
     usage: "lore put <concept-id> [--bundle <path>] < request.json",
     summary: "Create, merge, or explicitly replace one concept from a JSON request on stdin.",

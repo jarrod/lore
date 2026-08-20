@@ -6,7 +6,7 @@ import { Database } from "bun:sqlite";
 import { cachePath, openDatabase } from "../../src/index/database";
 import { refreshIndex } from "../../src/index/refresh";
 import { findConcepts } from "../../src/index/search";
-import { graphTraversal, shortestPath } from "../../src/index/graph";
+import { bundleGraph, graphTraversal, shortestPath } from "../../src/index/graph";
 
 let root: string;
 let bundle: string;
@@ -39,6 +39,9 @@ describe("derived index", () => {
     expect((findConcepts(opened.db, "identity", { type: "Team", scope: "teams" }) as Array<{ id: string }>)[0]?.id).toBe("teams/identity");
     const graph = graphTraversal(opened.db, "capabilities/payments", "out", 3);
     expect(graph.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ id: "systems/okta" })]));
+    const complete = bundleGraph(opened.db);
+    expect(complete.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ id: "references/orphan" }), expect.objectContaining({ id: "systems/missing", missing: true })]));
+    expect(bundleGraph(opened.db, "owned_by").nodes.map((node) => node.id)).toEqual(["capabilities/customer-identity", "teams/identity"]);
     const pathResult = shortestPath(opened.db, "capabilities/payments", "systems/okta");
     expect(pathResult.found).toBeTrue();
     const idsBefore = results.map((result) => result.id);

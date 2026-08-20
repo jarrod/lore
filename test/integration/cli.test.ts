@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -72,13 +72,18 @@ describe("CLI protocol", () => {
     expect(global.stderr).toBe("");
     const globalData = JSON.parse(global.stdout).data;
     expect(globalData.name).toBe("lore");
-    expect(globalData.commands.map((command: { name: string }) => command.name)).toEqual(["init", "info", "index", "find", "get", "graph", "put", "status", "check"]);
+    expect(globalData.commands.map((command: { name: string }) => command.name)).toEqual(["init", "info", "index", "find", "get", "graph", "visualise", "put", "status", "check"]);
 
     const command = await cli(["graph", "--help"]);
     expect(command.exitCode).toBe(0);
     const commandData = JSON.parse(command.stdout).data;
     expect(commandData.name).toBe("graph");
     expect(commandData.options).toEqual(expect.arrayContaining([expect.objectContaining({ flag: "--to" })]));
+
+    const visualise = await cli(["visualise", "--help"]);
+    const visualiseData = JSON.parse(visualise.stdout).data;
+    expect(visualiseData.name).toBe("visualise");
+    expect(visualiseData.options).toEqual(expect.arrayContaining([expect.objectContaining({ flag: "--open" }), expect.objectContaining({ flag: "--max-nodes" })]));
   });
 
   test("prints only the version", async () => {
@@ -237,5 +242,41 @@ describe("CLI protocol", () => {
     const missing = await cli(["status", "systems/missing-status", "reviewed"]);
     expect(missing.exitCode).toBe(4);
     expect(JSON.parse(missing.stderr).error.code).toBe("CONCEPT_NOT_FOUND");
+  });
+
+  test("generates complete and rooted visualisations as disposable HTML", async () => {
+    const visualBundle = path.join(root, "visual-bundle");
+    cpSync(path.join(project, "test/fixtures/graph"), visualBundle, { recursive: true });
+    const completePath = path.join(root, "visualisations", "complete.html");
+    const complete = await cli(["visualise", "--output", completePath], undefined, visualBundle);
+    expect(complete.exitCode).toBe(0);
+    expect(complete.stderr).toBe("");
+    const completeData = JSON.parse(complete.stdout).data as { path: string; scope: string; root: null; nodes: number; edges: number; opened: boolean };
+    expect(completeData).toEqual(expect.objectContaining({ path: realpathSync(completePath), scope: "bundle", root: null, nodes: 9, edges: 9, opened: false }));
+    const html = readFileSync(completePath, "utf8");
+    expect(html).toContain("Lore knowledge graph");
+    expect(html).toContain("systems/missing");
+    expect(html).not.toContain("fetch(");
+
+    writeFileSync(completePath, "replace me");
+    expect((await cli(["visualise", "--output", completePath], undefined, visualBundle)).exitCode).toBe(0);
+    expect(readFileSync(completePath, "utf8")).not.toBe("replace me");
+
+    const rootedPath = path.join(root, "visualisations", "rooted.html");
+    const rooted = await cli(["visualise", "capabilities/payments", "--direction", "out", "--depth", "2", "--output", rootedPath], undefined, visualBundle);
+    expect(rooted.exitCode).toBe(0);
+    expect(JSON.parse(rooted.stdout).data).toEqual(expect.objectContaining({ scope: "rooted", root: "capabilities/payments" }));
+    expect(readFileSync(rootedPath, "utf8")).toContain("capabilities/payments");
+
+    const tooLarge = await cli(["visualise", "--max-nodes", "1", "--output", path.join(root, "too-large.html")], undefined, visualBundle);
+    expect(tooLarge.exitCode).toBe(6);
+    expect(JSON.parse(tooLarge.stderr).error.code).toBe("GRAPH_TOO_LARGE");
+
+    const invalidWholeOptions = await cli(["visualise", "--depth", "2", "--output", path.join(root, "invalid.html")], undefined, visualBundle);
+    expect(invalidWholeOptions.exitCode).toBe(2);
+    const insideOutput = path.join(visualBundle, "generated", "graph.html");
+    const insideBundle = await cli(["visualise", "--output", insideOutput], undefined, visualBundle);
+    expect(insideBundle.exitCode).toBe(2);
+    expect(existsSync(path.dirname(insideOutput))).toBeFalse();
   });
 });

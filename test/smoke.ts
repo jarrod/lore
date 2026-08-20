@@ -14,6 +14,7 @@ const binary = suppliedBinary
 const bundle = path.join(project, "test", "fixtures", "graph");
 const cache = mkdtempSync(path.join(os.tmpdir(), "lore-smoke-"));
 const initializedRepository = mkdtempSync(path.join(os.tmpdir(), "lore-init-smoke-"));
+const visualisation = path.join(initializedRepository, "knowledge-graph.html");
 
 const commands = [
   ["--help"],
@@ -22,6 +23,7 @@ const commands = [
   ["find", "customer identity"],
   ["get", "capabilities/customer-identity", "--section", "Authentication"],
   ["graph", "capabilities/payments", "--depth", "3"],
+  ["visualise", "capabilities/payments", "--depth", "3", "--output", visualisation],
   ["check"],
 ];
 
@@ -56,6 +58,7 @@ try {
   const repeatedData = JSON.parse(repeated.stdout.toString()) as { ok?: boolean; data?: { installed?: boolean } };
   if (repeatedData.ok !== true || repeatedData.data?.installed !== false) throw new Error("init was not idempotent");
   if (!readFileSync(ignore, "utf8").includes("custom-entry")) throw new Error("init did not preserve existing ignore entries");
+  if (!readFileSync(ignore, "utf8").includes("/visualisations/")) throw new Error("init did not ignore generated visualisations");
 
   for (const args of commands) {
     const child = Bun.spawnSync([binary, ...args, "--bundle", bundle], {
@@ -66,6 +69,9 @@ try {
     if (child.exitCode !== 0) throw new Error(`${args[0]} failed: ${child.stderr.toString()}`);
     const parsed = JSON.parse(child.stdout.toString()) as { ok?: boolean };
     if (parsed.ok !== true) throw new Error(`${args[0]} did not return a success envelope`);
+  }
+  if (!existsSync(visualisation) || !readFileSync(visualisation, "utf8").includes("Lore knowledge graph")) {
+    throw new Error("visualise did not produce a standalone HTML graph");
   }
 } finally {
   rmSync(cache, { recursive: true, force: true });

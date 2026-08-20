@@ -84,7 +84,7 @@ if ($actual -ne $expected) { throw "Lore checksum verification failed" }
 
 The hash comparison produces no output when it succeeds; a mismatch stops installation. Early Lore releases are not code-signed. If Windows blocks the verified executable, run `Unblock-File ".\$asset"` before initialization.
 
-`lore init` installs the executable into the selected repository and creates `.lore/knowledge`, `.lore/cache`, and `.lore/.gitignore`. It preserves existing knowledge and is safe to repeat. For a repeatable version-pinned installation, replace `releases/latest/download` with `releases/download/v0.1.0`, using the required release tag. To upgrade Lore, download the newer executable and run `init` against the repository again.
+`lore init` installs the executable into the selected repository and creates `.lore/knowledge`, `.lore/cache`, and `.lore/.gitignore`. It also configures `.lore/visualisations` as ignored derived output. It preserves existing knowledge and is safe to repeat. For a repeatable version-pinned installation, replace `releases/latest/download` with `releases/download/v0.1.0`, using the required release tag. To upgrade Lore, download the newer executable and run `init` against the repository again.
 
 ## Commands
 
@@ -98,6 +98,7 @@ lore index [--rebuild]
 lore find <query> [--type T] [--tag T] [--status S] [--scope ID] [--limit N]
 lore get <concept-id> [--section HEADING]
 lore graph <concept-id> [--direction in|out|both] [--depth 1..8] [--rel R] [--to ID]
+lore visualise [<concept-id>] [--direction in|out|both] [--depth 1..8] [--rel R] [--max-nodes 1..5000] [--output PATH] [--open]
 lore put <concept-id> < request.json
 lore status <concept-id> <status> [--expected-hash HASH]
 lore check [--strict]
@@ -135,6 +136,18 @@ x-okf:
 ```
 
 Targets are canonical concept IDs. Relationship names match `[a-z][a-z0-9_]*`.
+
+## Visualisation
+
+`visualise` generates a disposable, self-contained HTML graph without a server, network request, Graphviz, or browser-side dependency. Omit the concept ID for the complete bundle, or provide one to visualise a neighbourhood using the same direction, depth, and relationship semantics as `graph`:
+
+```bash
+lore visualise
+lore visualise knowledge/example --direction both --depth 2 --open
+lore visualise --rel related_to --output .lore/visualisations/related.html
+```
+
+The command returns the absolute output path and graph counts as compact JSON. It refuses graphs above 500 nodes by default instead of producing a misleading partial view; use `--max-nodes` to explicitly raise the limit up to 5000. Generated files belong outside the authoritative bundle and are ignored under `.lore/visualisations/`.
 
 ## Knowledge structure
 
@@ -217,7 +230,8 @@ Initialization creates:
 ├── cache/            # disposable SQLite state
 ├── knowledge/        # authoritative, portable OKF Markdown
 │   └── index.md
-└── .gitignore        # ignores bin/ and cache/
+├── visualisations/   # disposable HTML graphs, created on demand
+└── .gitignore        # ignores bin/, cache/, and visualisations/
 ```
 
 The agent invokes the repository-local binary with:

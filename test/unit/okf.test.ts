@@ -3,6 +3,8 @@ import { validateConceptId } from "../../src/okf/ids";
 import { effectiveStatus, splitDocument, serializeDocument, trustTier, isStale } from "../../src/okf/frontmatter";
 import { extractMarkdownEdges, extractSection, extractTypedEdges } from "../../src/okf/markdown";
 import { naturalFtsQuery } from "../../src/index/search";
+import { browserCommand, safeFilename } from "../../src/commands/visualise";
+import { renderVisualisation } from "../../src/visualisation/html";
 
 describe("OKF primitives", () => {
   test("validates canonical concept IDs", () => {
@@ -60,5 +62,27 @@ describe("OKF primitives", () => {
 
   test("escapes natural FTS terms", () => {
     expect(naturalFtsQuery('customer "identity"')).toBe('"customer" AND """identity"""');
+  });
+
+  test("creates safe visualisation filenames and browser commands", () => {
+    expect(safeFilename("notes/An example: 1")).toBe("notes-An-example-1");
+    expect(browserCommand("/tmp/graph.html", "darwin")).toEqual(["open", "/tmp/graph.html"]);
+    expect(browserCommand("C:\\graph.html", "win32")).toEqual(["cmd", "/c", "start", "", "C:\\graph.html"]);
+    expect(browserCommand("/tmp/graph.html", "linux")).toEqual(["xdg-open", "/tmp/graph.html"]);
+  });
+
+  test("renders a self-contained visualisation without allowing metadata injection", () => {
+    const html = renderVisualisation({
+      nodes: [{ id: "hostile", type: "Concept", title: "</script><script>alert(1)</script>" }],
+      edges: [],
+    });
+    expect(html).toContain("Content-Security-Policy");
+    expect(html).toContain("\\u003c/script\\u003e");
+    expect(html).not.toContain("</script><script>alert(1)</script>");
+    expect(html).not.toContain("fetch(");
+    expect(html).not.toContain("src=\"http");
+    const executable = /<script>\n([\s\S]*?)\n<\/script>/.exec(html)?.[1];
+    expect(executable).toBeDefined();
+    expect(() => new Function(executable!)).not.toThrow();
   });
 });

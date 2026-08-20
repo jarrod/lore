@@ -19,6 +19,7 @@ lore index [--rebuild] [--bundle <path>]
 lore find <query> [--type <type>] [--tag <tag>] [--status <status>] [--scope <concept-id>] [--limit <1..100>] [--bundle <path>]
 lore get <concept-id> [--section <heading>] [--bundle <path>]
 lore graph <concept-id> [--direction <in|out|both>] [--depth <1..8>] [--rel <relationship>] [--to <concept-id>] [--bundle <path>]
+lore visualise [<concept-id>] [--direction <in|out|both>] [--depth <1..8>] [--rel <relationship>] [--max-nodes <1..5000>] [--output <path>] [--open] [--bundle <path>]
 lore put <concept-id> [--bundle <path>] < request.json
 lore status <concept-id> <status> [--expected-hash <hash>] [--bundle <path>]
 lore check [--strict] [--bundle <path>]
@@ -29,6 +30,8 @@ lore check [--strict] [--bundle <path>]
 `get` returns the content hash, derived trust, full frontmatter, and original Markdown body. `--section` returns the exact matching Markdown heading span.
 
 `graph` defaults to both directions and depth 1. Preserve edge origin in explanations: `markdown` denotes ordinary `links_to` references; `typed` denotes `x-okf.rel` metadata.
+
+`visualise` creates a disposable, offline HTML graph for a user to inspect. Omit the concept ID for the complete bundle or supply one for a rooted neighbourhood. It returns the generated absolute path in the JSON envelope and refuses more than 500 nodes unless `--max-nodes` explicitly raises the limit. Use `--open` only when the user asked to open the graph. Continue using `graph` JSON for agent investigation; never treat the generated layout as knowledge.
 
 `status` performs a guarded top-level status merge without changing the body or other metadata. Use the hash returned by `get` with `--expected-hash` for existing content.
 

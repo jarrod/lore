@@ -47,9 +47,10 @@ Use the smallest useful sequence:
 
 1. Run `info` to orient a multi-step investigation or mutation.
 2. Use `find` when given a topic and `get` when given a canonical ID.
-3. Use `graph` only for relationships, backlinks, neighbourhoods, or paths.
-4. Use `check` for bundle health or after mutation.
-5. Use `put` for content changes and `status` for lifecycle-only changes.
+3. Use `graph` for agent reasoning about relationships, backlinks, neighbourhoods, or paths.
+4. Use `visualise` only when the user explicitly requests a human-readable graph; do not use generated HTML as evidence or as a substitute for `graph` JSON.
+5. Use `check` for bundle health or after mutation.
+6. Use `put` for content changes and `status` for lifecycle-only changes.
 
 Do not load every concept by default. Search for relevant concepts, traverse only useful relationships, and retrieve the minimum authoritative content needed to answer.
 
