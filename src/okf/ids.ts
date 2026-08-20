@@ -24,7 +24,12 @@ export function idFromRelativePath(relativePath: string): string {
 export function conceptPath(bundle: string, id: string): string {
   const valid = validateConceptId(id);
   const destination = path.resolve(bundle, ...valid.split("/")) + ".md";
-  const prefix = bundle.endsWith(path.sep) ? bundle : `${bundle}${path.sep}`;
-  if (!destination.startsWith(prefix)) throw invalidArgument("Concept path escapes bundle", { id });
+  assertBundlePath(bundle, destination, id);
   return destination;
+}
+
+export function assertBundlePath(bundle: string, candidate: string, id: string): string {
+  const relative = path.relative(bundle, candidate);
+  if (relative === "" || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`))) return candidate;
+  throw invalidArgument("Concept path escapes bundle", { id });
 }

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = "1";
+export const SCHEMA_VERSION = "2";
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS concept (
@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS concept (
   title TEXT,
   description TEXT,
   status TEXT,
+  trust TEXT NOT NULL,
   stale_after TEXT,
   hash TEXT NOT NULL,
   mtime_ms INTEGER,

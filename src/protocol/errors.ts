@@ -30,3 +30,6 @@ export const notFound = (code: string, message: string, details?: Record<string,
 
 export const conflict = (message: string, details?: Record<string, unknown>) =>
   new LoreError("MUTATION_CONFLICT", message, EXIT.conflict, details);
+
+export const unsupported = (message: string, details?: Record<string, unknown>) =>
+  new LoreError("UNSUPPORTED_CAPABILITY", message, EXIT.unsupported, details);

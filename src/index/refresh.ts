@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import path from "node:path";
 import { stat } from "node:fs/promises";
 import { loadConcept } from "../okf/bundle";
-import { effectiveStatus } from "../okf/frontmatter";
+import { effectiveStatus, trustTier } from "../okf/frontmatter";
 
 export interface RefreshResult {
   concepts: number;
@@ -56,16 +56,17 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
     for (const concept of changed) {
       db.query("DELETE FROM edge WHERE src=?").run(concept.id);
       db.query("DELETE FROM concept_fts WHERE id=?").run(concept.id);
-      db.query(`INSERT INTO concept(id,path,type,title,description,status,stale_after,hash,mtime_ms,size_bytes)
-        VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+      db.query(`INSERT INTO concept(id,path,type,title,description,status,trust,stale_after,hash,mtime_ms,size_bytes)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
         path=excluded.path,type=excluded.type,title=excluded.title,description=excluded.description,status=excluded.status,
-        stale_after=excluded.stale_after,hash=excluded.hash,mtime_ms=excluded.mtime_ms,size_bytes=excluded.size_bytes`).run(
+        trust=excluded.trust,stale_after=excluded.stale_after,hash=excluded.hash,mtime_ms=excluded.mtime_ms,size_bytes=excluded.size_bytes`).run(
         concept.id,
         concept.path,
         String(concept.frontmatter.type),
         stringOrNull(concept.frontmatter.title),
         stringOrNull(concept.frontmatter.description),
         effectiveStatus(concept.frontmatter),
+        trustTier(concept.frontmatter),
         stringOrNull(concept.frontmatter.stale_after),
         concept.hash,
         concept.mtimeMs,

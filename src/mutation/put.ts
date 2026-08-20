@@ -4,12 +4,12 @@ import path from "node:path";
 import { openDatabase } from "../index/database";
 import { refreshIndex } from "../index/refresh";
 import { splitDocument, serializeDocument, type Frontmatter } from "../okf/frontmatter";
-import { conceptPath } from "../okf/ids";
+import { assertBundlePath, conceptPath } from "../okf/ids";
 import { extractTypedEdges } from "../okf/markdown";
 import { conflict, invalidArgument, invalidOkf, notFound } from "../protocol/errors";
 import { ensureNoArgs } from "../commands/options";
 
-interface PutRequest {
+export interface PutRequest {
   mode?: "create" | "merge" | "replace";
   frontmatter?: Frontmatter;
   body?: string;
@@ -26,6 +26,10 @@ export async function runPut(bundle: string, args: string[]): Promise<unknown> {
   let request: PutRequest;
   try { request = JSON.parse(await Bun.stdin.text()) as PutRequest; }
   catch { throw invalidArgument("put requires a valid JSON request on stdin"); }
+  return putConcept(bundle, id, request);
+}
+
+export async function putConcept(bundle: string, id: string, request: PutRequest): Promise<unknown> {
   if (!request || typeof request !== "object" || Array.isArray(request)) throw invalidArgument("put request must be an object");
   if (request.body !== undefined && request.body_file !== undefined) throw invalidArgument("body and body_file are mutually exclusive");
   if (request.body !== undefined && typeof request.body !== "string") throw invalidArgument("body must be a string");
@@ -40,7 +44,9 @@ export async function runPut(bundle: string, args: string[]): Promise<unknown> {
   if (mode === "replace" && request.allow_destructive !== true) throw conflict("replace requires allow_destructive=true", { id });
   let current: { frontmatter: Frontmatter; body: string; hash: string } | undefined;
   if (exists) {
-    const content = await readFile(destination, "utf8");
+    const resolvedDestination = await realpath(destination);
+    assertBundlePath(bundle, resolvedDestination, id);
+    const content = await readFile(resolvedDestination, "utf8");
     const parsed = splitDocument(content, id);
     current = { ...parsed, hash: new Bun.CryptoHasher("sha256").update(content).digest("hex") };
     if (request.expected_hash !== undefined && request.expected_hash !== current.hash) throw conflict("Concept hash does not match", { id, expected_hash: request.expected_hash, actual_hash: current.hash });
@@ -67,10 +73,7 @@ export async function runPut(bundle: string, args: string[]): Promise<unknown> {
   try { extractTypedEdges(frontmatter); } catch (error) { throw invalidOkf("Resulting concept has malformed x-okf.rel", { id, reason: String(error) }); }
   const content = serializeDocument(frontmatter, body);
   splitDocument(content, id);
-  await mkdir(path.dirname(destination), { recursive: true });
-  const realParent = await realpath(path.dirname(destination));
-  const bundlePrefix = bundle.endsWith(path.sep) ? bundle : `${bundle}${path.sep}`;
-  if (realParent !== bundle && !realParent.startsWith(bundlePrefix)) throw invalidArgument("Concept path escapes bundle through a symbolic link", { id });
+  await ensureContainedParent(bundle, destination, id);
   const temporary = `${destination}.lore-${process.pid}-${crypto.randomUUID()}.tmp`;
   try {
     await Bun.write(temporary, content);
@@ -83,6 +86,19 @@ export async function runPut(bundle: string, args: string[]): Promise<unknown> {
   try { await refreshIndex(db, bundle); } finally { db.close(); }
   const hash = new Bun.CryptoHasher("sha256").update(content).digest("hex");
   return { id, mode, created: !exists, hash };
+}
+
+async function ensureContainedParent(bundle: string, destination: string, id: string): Promise<void> {
+  const parent = path.dirname(destination);
+  let existingAncestor = parent;
+  while (!existsSync(existingAncestor)) {
+    const next = path.dirname(existingAncestor);
+    if (next === existingAncestor) throw invalidArgument("Concept path has no accessible bundle ancestor", { id });
+    existingAncestor = next;
+  }
+  assertBundlePath(bundle, await realpath(existingAncestor), id);
+  await mkdir(parent, { recursive: true });
+  assertBundlePath(bundle, await realpath(parent), id);
 }
 
 async function readBodyFile(file: string): Promise<string> {

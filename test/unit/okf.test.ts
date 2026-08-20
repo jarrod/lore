@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { validateConceptId } from "../../src/okf/ids";
-import { splitDocument, serializeDocument, trustTier, isStale } from "../../src/okf/frontmatter";
+import { effectiveStatus, splitDocument, serializeDocument, trustTier, isStale } from "../../src/okf/frontmatter";
 import { extractMarkdownEdges, extractSection, extractTypedEdges } from "../../src/okf/markdown";
 import { naturalFtsQuery } from "../../src/index/search";
 
@@ -12,19 +12,38 @@ describe("OKF primitives", () => {
     }
   });
 
-  test("parses YAML and serializes deterministic JSON-compatible YAML", () => {
+  test("parses and serializes block YAML while preserving key order", () => {
     const parsed = splitDocument("---\ntitle: Okta\ntype: System\ncustom: {z: 1, a: 2}\n---\n# Okta\n");
     expect(parsed.frontmatter.type).toBe("System");
     const output = serializeDocument(parsed.frontmatter, parsed.body);
-    expect(output.indexOf('"custom"')).toBeLessThan(output.indexOf('"title"'));
+    expect(output).toBe("---\ntitle: Okta\ntype: System\ncustom:\n  z: 1\n  a: 2\n---\n# Okta\n");
     expect(splitDocument(output).frontmatter.custom).toEqual({ a: 2, z: 1 });
+  });
+
+  test("quotes ambiguous YAML strings and preserves nested collections", () => {
+    const frontmatter = {
+      type: "System",
+      tags: ["one", "true", "a: b"],
+      empty: [],
+      custom: { enabled: true, value: "null" },
+      "x-okf": { rel: [["depends_on", "systems/okta"]] },
+    };
+    const output = serializeDocument(frontmatter, "# Body\n");
+    expect(output).toContain('  - "true"');
+    expect(output).toContain('  - "a: b"');
+    expect(output).toContain("  value: \"null\"");
+    expect(output).toContain("    - - depends_on\n      - systems/okta");
+    expect(splitDocument(output).frontmatter).toEqual(frontmatter);
   });
 
   test("derives trust and freshness", () => {
     expect(trustTier({ type: "X" })).toBe("unverified");
+    expect(trustTier({ type: "X", verified: false })).toBe("unverified");
     expect(trustTier({ type: "X", verified: { by: "process:ci", at: "2026-01-01" } })).toBe("machine_confirmed");
     expect(trustTier({ type: "X", verified: [{ by: "human:j", at: "2026-01-01" }] })).toBe("human_reviewed");
     expect(isStale({ type: "X", stale_after: "2020-01-01" }, "2020-01-01")).toBeTrue();
+    expect(effectiveStatus({ type: "X" })).toBeNull();
+    expect(effectiveStatus({ type: "X", status: "reviewed" })).toBe("reviewed");
   });
 
   test("extracts Markdown and typed edges", () => {

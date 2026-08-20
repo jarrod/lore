@@ -1,119 +1,85 @@
 ---
 name: use-lore
-description: Use the Lore CLI to investigate, explain, validate, and safely update Open Knowledge Format (OKF) bundles. Invoke for natural-language questions about a Lore knowledge bundle, concept discovery, targeted retrieval, dependencies, backlinks, relationship paths, knowledge-health checks, or guarded concept creation and editing.
+description: Use a repository-local standalone Lore binary to initialize, search, retrieve, relate, validate, and safely mutate a Lore knowledge bundle. Apply when an agent needs to store or work with durable repository knowledge without imposing a subject-matter taxonomy.
 ---
 
 # Use Lore
 
-Use Lore as the deterministic knowledge interface, then translate its compact JSON into a direct answer for the user. Keep search, graph traversal, validation, and mutation in Lore; use agent reasoning only to choose operations, synthesize evidence, and explain results.
+Use Lore as a deterministic mechanism for durable knowledge. The user owns the content, vocabulary, classifications, and relationships. Lore supplies storage, retrieval, lifecycle metadata, verification signals, graph traversal, validation, and guarded mutation.
 
-## Establish the Command and Bundle
+## Require the Standalone Binary
 
-1. Prefer an installed `lore` executable on `PATH`.
-2. In a Lore source checkout without an installed executable, use `bun run src/cli.ts` from the repository root.
-3. Pass `--bundle <absolute-path>` when the target bundle is known. Otherwise respect `OKF_BUNDLE`, then the current working directory. Never infer a bundle by searching parent directories.
-4. Run `lore info` before a multi-step investigation or mutation. Run `lore --help` or `lore <command> --help` when command details are uncertain; help is structured JSON.
+1. Determine the repository root being worked on.
+2. Use `<repo-root>/.lore/bin/lore` as the only executable location on macOS.
+3. If it is absent, stop and tell the user to obtain a trusted standalone executable and run `<downloaded-lore> init --repo <repo-root>`.
+4. Run `<repo-root>/.lore/bin/lore --help` before using it.
 
-If the execution sandbox cannot write to the platform cache directory, set `OKF_CACHE_DIR` to a writable disposable directory outside the knowledge bundle. Do not request broader filesystem access solely for the derived cache.
+Never invoke Lore's TypeScript source, Bun, Node.js, npm, a package script, compiler, `LORE_BIN`, or an executable from `PATH`. Installing this skill does not install Lore.
 
-If Lore is unavailable, state what is missing and how to make the executable available. Do not imitate Lore by directly parsing or rewriting the bundle.
+## Select the Bundle
 
-## Handle the Protocol
+Use a bundle explicitly supplied by the user; otherwise use `<repo-root>/.lore/knowledge`. If repository-local Lore is installed but that bundle is absent and setup is authorized, run `<repo-root>/.lore/bin/lore init --repo <repo-root>`.
 
-Treat stdout as a compact JSON success envelope:
+For repository-local knowledge, run commands with:
 
-```json
-{"ok":true,"data":{}}
+```text
+OKF_CACHE_DIR=<repo-root>/.lore/cache <repo-root>/.lore/bin/lore <command> --bundle <repo-root>/.lore/knowledge
 ```
 
-Treat stderr as a compact JSON error envelope:
+Do not use an ordinary source root as a bundle. Keep disposable cache data outside the authoritative knowledge directory.
 
-```json
-{"ok":false,"error":{"code":"CONCEPT_NOT_FOUND","message":"Concept does not exist","details":{"id":"systems/missing"}}}
-```
+## Preserve Content Neutrality
 
-Inspect both the envelope and process exit code. Do not show raw envelopes unless the user asks; summarize the evidence in ordinary language and retain canonical concept IDs so conclusions remain traceable.
+- Do not assume that knowledge is software architecture, documentation, research, a decision, a task, a person, or any other domain.
+- Do not invent a taxonomy, folder hierarchy, concept type, relationship vocabulary, lifecycle status, heading template, or required body structure merely because an example used one.
+- Reuse a classification only when the bundle already uses it consistently and it accurately represents the user's intent.
+- If no suitable classification exists, use the broad type `Concept` and a descriptive root-level concept ID. Do not invent a domain hierarchy to make the bundle look organized.
+- Treat an ontology stored in the bundle as advisory user-owned knowledge. Reuse accepted terms where they fit; propose additions when they do not. Never silently expand or enforce the ontology.
+- Record source claims, user statements, and agent inferences distinctly. Do not present agent interpretation as source content.
+- Do not add `verified` metadata without evidence of who or what performed verification. Lore reports absent verification as `unverified`.
+- Do not infer a lifecycle status. An absent status is unspecified. Use `lore status` when the user or recorded workflow supplies a status.
 
-Exit codes have these meanings:
+These rules constrain agent-authored structure, not the user's content. Preserve terminology and organization explicitly chosen by the user even when it differs from existing conventions.
 
-- `0`: success
-- `2`: invalid command or arguments
-- `3`: invalid OKF or strict validation failure
-- `4`: concept or bundle not found
-- `5`: mutation conflict
-- `6`: unsupported runtime capability
-- `10`: internal error
-
-Do not retry argument, validation, capability, or internal errors blindly. Explain the actionable cause. On a mutation conflict, reread the concept and reconcile instead of overwriting it.
-
-## Investigate Knowledge
+## Choose the Smallest Operation
 
 Use the smallest useful sequence:
 
-1. Start with `lore find <query>` when the user provides a topic rather than a canonical ID. Add `--type`, `--tag`, `--status`, or `--scope` only when the request supplies that constraint or the first result set is too broad.
-2. Use `lore get <concept-id>` to inspect authoritative frontmatter, body, and current content hash. Use `--section <heading>` when only one section is needed.
-3. Use `lore graph <concept-id>` for neighbours and backlinks. Set `--direction in` for references to the concept, `--direction out` for its dependencies, and `--direction both` for context.
-4. Increase `--depth` deliberately for multi-hop questions. Use `--rel <relationship>` for a typed relationship and `--to <concept-id>` for a deterministic shortest path.
-5. Run `lore check` for bundle-health questions. Use `--strict` only when warnings must fail a gate.
+1. Run `info` to orient a multi-step investigation or mutation.
+2. Use `find` when given a topic and `get` when given a canonical ID.
+3. Use `graph` only for relationships, backlinks, neighbourhoods, or paths.
+4. Use `check` for bundle health or after mutation.
+5. Use `put` for content changes and `status` for lifecycle-only changes.
 
-Do not load every concept by default. Search for seeds, traverse only relevant connections, then retrieve the concepts or sections needed to support the answer. Distinguish Markdown `links_to` edges from typed relationships and preserve edge origin when that distinction matters.
+Do not load every concept by default. Search for relevant concepts, traverse only useful relationships, and retrieve the minimum authoritative content needed to answer.
 
-When evidence is incomplete or conflicting, say so. Lore retrieves recorded knowledge; it does not prove that the recorded claim is true.
+Read [references/cli.md](references/cli.md) when selecting command options, constructing mutation input, interpreting exits, or recovering from an error. Installed `--help` remains authoritative for the binary version.
 
-## Explain Results
+## Answer from Evidence
 
-Lead with the answer, followed by the concepts and relationships that support it. Use canonical IDs such as `systems/payment-api`, not filesystem paths. Mention freshness, trust, deprecation, broken links, or missing targets when those properties affect confidence.
+Translate compact Lore JSON into a direct answer. Keep canonical concept IDs for traceability, and separate:
 
-For broad questions, separate:
+- what stored content explicitly records;
+- what indexed relationships establish;
+- what the agent inferred.
 
-- what the bundle explicitly records;
-- what follows from graph traversal;
-- what is an agent inference.
-
-Do not claim an absent search result proves an idea does not exist unless the relevant searches and relationship directions have been checked.
+Mention lifecycle, trust, stale content, broken links, or missing targets when they materially affect confidence. Lore retrieves recorded knowledge; it does not prove every claim is true.
 
 ## Mutate Safely
 
-Treat `lore put` as the only knowledge mutation primitive. Do not edit concept Markdown directly.
+Use `lore put` as the only content mutation primitive. Never edit concept Markdown directly.
 
-Before updating an existing concept:
+Before updating an existing concept, use `get` and retain its hash. Merge by default, preserve omitted body and metadata, and pass `expected_hash`. Use replacement only when the user explicitly requests complete destructive replacement. After mutation, reread the concept and run `check`.
 
-1. Run `lore get <concept-id>` and retain its content hash.
-2. Confirm the requested change and preserve the returned provenance, verification, generated metadata, unknown frontmatter, and body unless the user explicitly changes them.
-3. Construct exactly one JSON request and pipe it to `lore put <concept-id>`. Include `expected_hash` for updates.
-4. Run `lore get <concept-id>` again and then `lore check` to verify the result.
+Use `lore status <concept-id> <status> --expected-hash <hash>` when only lifecycle status changes. Status values are user-defined; do not select one without user direction or an established bundle workflow.
 
-Prefer merge mode:
+When creating content:
 
-```json
-{
-  "mode": "merge",
-  "frontmatter": {"title": "Payment API"},
-  "expected_hash": "hash-returned-by-get"
-}
-```
+1. Search for an existing concept to avoid duplication.
+2. Consult relevant ontology or established bundle vocabulary if present.
+3. Preserve the user's terminology and requested structure.
+4. Use the least-assumptive type and location permitted by those inputs.
+5. Add relationships only when supported by the content or explicitly supplied by the user.
+6. Create with `put`, then retrieve and validate the result.
 
-For creation, provide a valid non-empty `type` and the intended body:
-
-```json
-{
-  "mode": "create",
-  "frontmatter": {"type": "System", "title": "Checkout"},
-  "body": "# Checkout\n",
-  "relations": [["depends_on", "systems/payment-api"]]
-}
-```
-
-Supplying `relations` replaces the complete controlled `x-okf.rel` collection; omitting it preserves existing relations. Use either `body` or `body_file`, never both. Resolve `body_file` relative to the command's working directory.
-
-Use replace mode only when the user explicitly requests complete destructive replacement. It requires an existing concept, complete replacement content, and `allow_destructive: true`. Never add destructive permission merely to make a failed request pass.
-
-After exit code `5`, fetch the new hash, compare the user's requested change with current content, and ask for direction if reconciliation would change intent.
-
-## Example Requests
-
-- “What do we know about customer identity?” Find relevant concepts, retrieve the strongest matches, inspect nearby relationships, and synthesize the recorded answer.
-- “What depends on Kafka?” Resolve Kafka to a canonical ID, traverse incoming edges, and retrieve important dependants before explaining impact.
-- “How does Checkout reach Okta?” Resolve both IDs and use `graph --to` for the shortest recorded path.
-- “Find stale or broken knowledge.” Run `check`, group findings by severity, and explain likely maintenance work.
-- “Add Checkout as a system that depends on Payments.” Confirm the target relationship, create through `put`, reread it, and validate the bundle.
+On a mutation conflict, reread the current content and reconcile only when doing so preserves the user's intent. Never force a destructive write merely to make a command succeed.

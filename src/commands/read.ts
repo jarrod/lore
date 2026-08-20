@@ -1,13 +1,14 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { type Database } from "bun:sqlite";
-import { TOOL_VERSION, openDatabase, verifyFts5 } from "../index/database";
+import { openDatabase, verifyFts5 } from "../index/database";
+import { TOOL_VERSION } from "../version";
 import { refreshIndex } from "../index/refresh";
 import { findConcepts } from "../index/search";
 import { graphTraversal, shortestPath, type Direction } from "../index/graph";
-import { conceptPath, validateConceptId } from "../okf/ids";
-import { splitDocument } from "../okf/frontmatter";
+import { assertBundlePath, conceptPath, validateConceptId } from "../okf/ids";
+import { splitDocument, trustTier } from "../okf/frontmatter";
 import { extractSection } from "../okf/markdown";
 import { invalidArgument, notFound } from "../protocol/errors";
 import { ensureNoArgs, takeFlag, takeOption } from "./options";
@@ -64,13 +65,17 @@ export async function runGet(bundle: string, args: string[]): Promise<unknown> {
   try { await refreshIndex(db, bundle); } finally { db.close(); }
   const filePath = conceptPath(bundle, id);
   if (!existsSync(filePath)) throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id });
-  const content = await readFile(filePath, "utf8");
+  let resolvedPath: string;
+  try { resolvedPath = await realpath(filePath); }
+  catch { throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id }); }
+  assertBundlePath(bundle, resolvedPath, id);
+  const content = await readFile(resolvedPath, "utf8");
   const parsed = splitDocument(content, id);
   const hash = new Bun.CryptoHasher("sha256").update(content).digest("hex");
-  if (!section) return { id, hash, frontmatter: parsed.frontmatter, body: parsed.body };
+  if (!section) return { id, hash, trust: trustTier(parsed.frontmatter), frontmatter: parsed.frontmatter, body: parsed.body };
   const body = extractSection(parsed.body, section);
   if (body === undefined) throw notFound("SECTION_NOT_FOUND", "Section does not exist", { id, section });
-  return { id, hash, frontmatter: parsed.frontmatter, section, body };
+  return { id, hash, trust: trustTier(parsed.frontmatter), frontmatter: parsed.frontmatter, section, body };
 }
 
 export async function runGraph(bundle: string, args: string[]): Promise<unknown> {

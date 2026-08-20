@@ -1,15 +1,22 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 let root: string;
 let bundle: string;
 let cache: string;
+let binary: string;
 const project = path.resolve(import.meta.dir, "../..");
 
 beforeAll(() => {
   root = mkdtempSync(path.join(os.tmpdir(), "lore-cli-test-"));
+  binary = path.join(root, process.platform === "win32" ? "lore.exe" : "lore");
+  const built = Bun.spawnSync([
+    "bun", "build", "--compile", "--define", "__LORE_COMPILED__=true",
+    "--outfile", binary, path.join(project, "src/cli.ts"),
+  ], { cwd: project, stdout: "pipe", stderr: "pipe" });
+  if (built.exitCode !== 0) throw new Error(`Could not build integration executable: ${built.stderr.toString()}`);
   bundle = path.join(root, "bundle");
   cache = path.join(root, "cache");
   cpSync(path.join(project, "test/fixtures/graph"), bundle, { recursive: true });
@@ -18,13 +25,38 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 async function cli(args: string[], stdin?: string, targetBundle = bundle): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawn(["bun", path.join(project, "src/cli.ts"), ...args, "--bundle", targetBundle], {
+  const process = Bun.spawn([binary, ...args, "--bundle", targetBundle], {
     cwd: project,
     env: { ...Bun.env, OKF_CACHE_DIR: cache },
     stdin: stdin === undefined ? "ignore" : new Blob([stdin]),
     stdout: "pipe",
     stderr: "pipe",
   });
+  const [exitCode, stdout, stderr] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+  ]);
+  return { exitCode, stdout, stderr };
+}
+
+async function sourceCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const process = Bun.spawn(["bun", path.join(project, "src/cli.ts"), ...args], {
+    cwd: project,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [exitCode, stdout, stderr] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+  ]);
+  return { exitCode, stdout, stderr };
+}
+
+async function compiledCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const process = Bun.spawn([binary, ...args], { cwd: project, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   const [exitCode, stdout, stderr] = await Promise.all([
     process.exited,
     new Response(process.stdout).text(),
@@ -40,13 +72,34 @@ describe("CLI protocol", () => {
     expect(global.stderr).toBe("");
     const globalData = JSON.parse(global.stdout).data;
     expect(globalData.name).toBe("lore");
-    expect(globalData.commands.map((command: { name: string }) => command.name)).toEqual(["info", "index", "find", "get", "graph", "put", "check"]);
+    expect(globalData.commands.map((command: { name: string }) => command.name)).toEqual(["init", "info", "index", "find", "get", "graph", "put", "status", "check"]);
 
     const command = await cli(["graph", "--help"]);
     expect(command.exitCode).toBe(0);
     const commandData = JSON.parse(command.stdout).data;
     expect(commandData.name).toBe("graph");
     expect(commandData.options).toEqual(expect.arrayContaining([expect.objectContaining({ flag: "--to" })]));
+  });
+
+  test("prints only the version", async () => {
+    const result = await compiledCli(["--version"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("0.1.0\n");
+    expect(result.stderr).toBe("");
+  });
+
+  test("refuses every command through the TypeScript runtime", async () => {
+    const target = path.join(root, "source-init-target");
+    mkdirSync(target);
+    const result = await sourceCli(["init", "--repo", target]);
+    expect(result.exitCode).toBe(6);
+    expect(result.stdout).toBe("");
+    expect(JSON.parse(result.stderr).error.code).toBe("UNSUPPORTED_CAPABILITY");
+    expect(existsSync(path.join(target, ".lore"))).toBeFalse();
+
+    const help = await sourceCli(["--help"]);
+    expect(help.exitCode).toBe(6);
+    expect(JSON.parse(help.stderr).error.code).toBe("UNSUPPORTED_CAPABILITY");
   });
 
   test("returns compact JSON and stable validation exits", async () => {
@@ -70,14 +123,15 @@ describe("CLI protocol", () => {
     expect(JSON.parse(result.stderr).error.code).toBe("CONCEPT_NOT_FOUND");
   });
 
-  test("classifies invalid concepts, unsafe links, reserved files and case collisions", async () => {
+  test("classifies invalid concepts, unsafe links, structurally invalid reserved files and case collisions", async () => {
     const invalidBundle = path.join(root, "invalid-bundle");
     cpSync(path.join(project, "test/fixtures/graph"), invalidBundle, { recursive: true });
     writeFileSync(path.join(invalidBundle, "broken.md"), "---\ntype: [\n---\n# Broken\n");
     writeFileSync(path.join(invalidBundle, "unsafe.md"), "---\ntype: Reference\n---\n# Unsafe\n\n[Escape](../../outside.md)\n");
     const nested = path.join(invalidBundle, "nested");
     mkdirSync(nested);
-    writeFileSync(path.join(nested, "index.md"), "---\ntype: Index\n---\n# Invalid nested index\n");
+    writeFileSync(path.join(nested, "index.md"), "---\ntype: Index\n---\nFree-form nested index content.\n");
+    writeFileSync(path.join(nested, "log.md"), "---\ninvalid: [\n---\nFree-form log content.\n");
     const caseDirectory = path.join(invalidBundle, "case-test");
     mkdirSync(caseDirectory);
     writeFileSync(path.join(caseDirectory, "Alpha.md"), "---\ntype: Reference\n---\n# A\n");
@@ -103,6 +157,28 @@ describe("CLI protocol", () => {
     expect(JSON.parse(result.stderr).error.code).toBe("INVALID_OKF");
   });
 
+  if (process.platform !== "win32") test("refuses concept paths that resolve outside the bundle", async () => {
+    const outsideConcept = path.join(root, "outside.md");
+    writeFileSync(outsideConcept, "---\ntype: Secret\ntitle: Outside\n---\n# Outside\n");
+    symlinkSync(outsideConcept, path.join(bundle, "systems/escaped.md"));
+
+    const get = await cli(["get", "systems/escaped"]);
+    expect(get.exitCode).toBe(2);
+    expect(get.stdout).toBe("");
+    expect(JSON.parse(get.stderr).error.code).toBe("INVALID_ARGUMENT");
+
+    const merge = await cli(["put", "systems/escaped"], JSON.stringify({ mode: "merge", frontmatter: { title: "Changed" } }));
+    expect(merge.exitCode).toBe(2);
+    expect(readFileSync(outsideConcept, "utf8")).not.toContain("Changed");
+
+    const outsideDirectory = path.join(root, "outside-directory");
+    mkdirSync(outsideDirectory);
+    symlinkSync(outsideDirectory, path.join(bundle, "linked-directory"));
+    const create = await cli(["put", "linked-directory/new"], JSON.stringify({ mode: "create", frontmatter: { type: "System" }, body: "# New\n" }));
+    expect(create.exitCode).toBe(2);
+    expect(existsSync(path.join(outsideDirectory, "new.md"))).toBeFalse();
+  });
+
   test("creates, merges and guards concepts without metadata loss", async () => {
     const created = await cli(["put", "systems/new-system"], JSON.stringify({
       mode: "create",
@@ -120,8 +196,8 @@ describe("CLI protocol", () => {
     }));
     expect(merged.exitCode).toBe(0);
     const stored = readFileSync(path.join(bundle, "systems/new-system.md"), "utf8");
-    expect(stored).toContain('"keep": true');
-    expect(stored).toContain('"generated"');
+    expect(stored).toContain("  keep: true");
+    expect(stored).toContain("generated:");
     expect(stored).toContain("Original body.");
 
     const conflict = await cli(["put", "systems/new-system"], JSON.stringify({ mode: "merge", expected_hash: "wrong", frontmatter: { title: "Lost" } }));
@@ -138,5 +214,28 @@ describe("CLI protocol", () => {
     const fileCreated = await cli(["put", "systems/from-file"], JSON.stringify({ mode: "create", frontmatter: { type: "System" }, body_file: bodyFile }));
     expect(fileCreated.exitCode).toBe(0);
     expect(readFileSync(path.join(bundle, "systems/from-file.md"), "utf8")).toContain("# From file");
+  });
+
+  test("changes lifecycle status deterministically without changing other content", async () => {
+    const before = await cli(["get", "systems/okta"]);
+    const beforeData = JSON.parse(before.stdout).data as { hash: string; trust: string; body: string };
+    expect(beforeData.trust).toBe("unverified");
+
+    const changed = await cli(["status", "systems/okta", "reviewed", "--expected-hash", beforeData.hash]);
+    expect(changed.exitCode).toBe(0);
+    expect(JSON.parse(changed.stdout).data.status).toBe("reviewed");
+
+    const after = await cli(["get", "systems/okta"]);
+    const afterData = JSON.parse(after.stdout).data as { frontmatter: Record<string, unknown>; body: string };
+    expect(afterData.frontmatter.status).toBe("reviewed");
+    expect(afterData.body).toBe(beforeData.body);
+
+    const conflict = await cli(["status", "systems/okta", "archived", "--expected-hash", beforeData.hash]);
+    expect(conflict.exitCode).toBe(5);
+    expect(JSON.parse(conflict.stderr).error.code).toBe("MUTATION_CONFLICT");
+
+    const missing = await cli(["status", "systems/missing-status", "reviewed"]);
+    expect(missing.exitCode).toBe(4);
+    expect(JSON.parse(missing.stderr).error.code).toBe("CONCEPT_NOT_FOUND");
   });
 });

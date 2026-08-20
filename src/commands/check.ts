@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { scanBundle, type Concept } from "../okf/bundle";
@@ -28,20 +27,16 @@ export async function runCheck(bundle: string, args: string[]): Promise<{ data: 
   }
   await validateReservedFiles(bundle, errors);
   const ids = new Set(concepts.map((concept) => concept.id));
-  const degree = new Map(concepts.map((concept) => [concept.id, 0]));
-  const status = new Map(concepts.map((concept) => [concept.id, concept.frontmatter.status ?? "stable"]));
+  const status = new Map(concepts.map((concept) => [concept.id, concept.frontmatter.status]));
   for (const concept of concepts) {
     for (const edge of concept.edges) {
-      degree.set(concept.id, (degree.get(concept.id) ?? 0) + 1);
       if (ids.has(edge.dst)) {
-        degree.set(edge.dst, (degree.get(edge.dst) ?? 0) + 1);
         if (status.get(edge.dst) === "deprecated") warnings.push({ code: "DEPRECATED_CONCEPT_REFERENCED", concept: concept.id, target: edge.dst });
       } else {
         warnings.push({ code: edge.origin === "typed" ? "MISSING_TYPED_RELATIONSHIP_TARGET" : "BROKEN_MARKDOWN_LINK", concept: concept.id, target: edge.dst });
       }
     }
   }
-  for (const [id, count] of degree) if (count === 0) warnings.push({ code: "ORPHAN_CONCEPT", concept: id });
   sortFindings(errors); sortFindings(warnings);
   const valid = errors.length === 0;
   const exitCode = !valid || (strict && warnings.length) ? EXIT.invalidOkf : EXIT.success;
@@ -63,28 +58,24 @@ async function validateReservedFiles(bundle: string, errors: Finding[]): Promise
   const glob = new Bun.Glob("**/{index,log}.md");
   for await (const relative of glob.scan({ cwd: bundle, dot: false, onlyFiles: true, followSymlinks: false })) {
     const content = await readFile(path.join(bundle, relative), "utf8");
-    const name = path.basename(relative).toLowerCase();
-    if (name === "index.md") {
-      const hasFrontmatter = content.startsWith("---\n") || content.startsWith("---\r\n");
-      if (hasFrontmatter && relative !== "index.md") errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Only the root index may have frontmatter" });
-      let body = content;
-      if (hasFrontmatter) {
-        const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content);
-        if (!match) { errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Invalid root index frontmatter" }); continue; }
-        try {
-          const frontmatter = Bun.YAML.parse(match[1] ?? "");
-          if (!frontmatter || typeof frontmatter !== "object" || Array.isArray(frontmatter) || Object.keys(frontmatter as object).some((key) => key !== "okf_version")) {
-            errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Root index frontmatter may contain only okf_version" });
-          }
-        } catch { errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Invalid root index frontmatter" }); }
-        body = content.slice(match[0].length);
+    if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) continue;
+    const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
+    if (!match) {
+      errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Reserved file has unterminated YAML frontmatter" });
+      continue;
+    }
+    try {
+      const frontmatter = Bun.YAML.parse(match[1] ?? "");
+      if (!frontmatter || typeof frontmatter !== "object" || Array.isArray(frontmatter)) {
+        errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Reserved file frontmatter must be a mapping" });
+        continue;
       }
-      if (!body.trim() || !/^#{1,6}\s+/m.test(body)) errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Index must group entries under headings" });
-    } else {
-      const dates = [...content.matchAll(/^##\s+(\d{4}-\d{2}-\d{2})\s*$/gm)].map((match) => match[1]!);
-      if (!content.trim() || !/^#\s+.+/m.test(content) || dates.length === 0 || dates.some((date, index) => index > 0 && date > dates[index - 1]!)) {
-        errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Log must contain a title and newest-first dated entries" });
+      const version = (frontmatter as Record<string, unknown>).okf_version;
+      if (version !== undefined && (typeof version !== "string" || !version.trim())) {
+        errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "okf_version must be a non-empty string" });
       }
+    } catch {
+      errors.push({ code: "INVALID_RESERVED_FILE", path: relative, reason: "Reserved file has invalid YAML frontmatter" });
     }
   }
 }

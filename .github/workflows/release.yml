@@ -62,7 +62,7 @@ jobs:
       - run: bun run typecheck
       - run: bun test
       - name: Build standalone binary
-        run: bun build --compile --outfile dist/${{ matrix.asset }} src/cli.ts
+        run: bun build --compile --define __LORE_COMPILED__=true --outfile dist/${{ matrix.asset }} src/cli.ts
       - name: Smoke-test standalone binary
         run: bun test/smoke.ts --binary dist/${{ matrix.asset }}
       - uses: actions/upload-artifact@v4

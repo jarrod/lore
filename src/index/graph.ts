@@ -63,7 +63,7 @@ function adjacent(db: Database, id: string, direction: Direction, rel?: string):
 }
 
 function nodeMetadata(db: Database, ids: string[]): unknown[] {
-  const query = db.query("SELECT id,type,title FROM concept WHERE id=?");
+  const query = db.query("SELECT id,type,title,status,trust FROM concept WHERE id=?");
   return ids.map((id) => query.get(id) ?? { id }).sort((a, b) => compareStrings(String((a as {id:string}).id), String((b as {id:string}).id)));
 }
 

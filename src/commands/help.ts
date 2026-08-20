@@ -1,4 +1,4 @@
-import { TOOL_VERSION } from "../index/database";
+import { TOOL_VERSION } from "../version";
 import { invalidArgument } from "../protocol/errors";
 
 interface CommandHelp {
@@ -12,6 +12,15 @@ interface CommandHelp {
 const bundleOption = { flag: "--bundle", value: "<path>", description: "Use this OKF bundle instead of OKF_BUNDLE or the current directory." };
 
 const commands: CommandHelp[] = [
+  {
+    name: "init",
+    usage: "lore init [--repo <path>]",
+    summary: "Install this executable and initialize repository-local Lore state.",
+    options: [
+      { flag: "--repo", value: "<path>", description: "Initialize this repository; defaults to the current directory." },
+      helpOption(),
+    ],
+  },
   {
     name: "info",
     usage: "lore info [--bundle <path>]",
@@ -36,7 +45,7 @@ const commands: CommandHelp[] = [
     options: [
       { flag: "--type", value: "<type>", description: "Require an exact concept type." },
       { flag: "--tag", value: "<tag>", description: "Require a matching tag." },
-      { flag: "--status", value: "<status>", description: "Require an effective lifecycle status." },
+      { flag: "--status", value: "<status>", description: "Require an explicitly recorded lifecycle status." },
       { flag: "--scope", value: "<concept-id>", description: "Limit results to a concept or directory prefix." },
       { flag: "--limit", value: "<1..100>", description: "Limit returned results; defaults to 20." },
       bundleOption,
@@ -76,6 +85,20 @@ const commands: CommandHelp[] = [
     options: [bundleOption, helpOption()],
   },
   {
+    name: "status",
+    usage: "lore status <concept-id> <status> [--expected-hash <hash>] [--bundle <path>]",
+    summary: "Set one concept's lifecycle status without changing its other content.",
+    arguments: [
+      { name: "concept-id", required: true, description: "Canonical destination concept ID." },
+      { name: "status", required: true, description: "User-defined non-empty lifecycle status." },
+    ],
+    options: [
+      { flag: "--expected-hash", value: "<hash>", description: "Reject the update unless the current content hash matches." },
+      bundleOption,
+      helpOption(),
+    ],
+  },
+  {
     name: "check",
     usage: "lore check [--strict] [--bundle <path>]",
     summary: "Validate an OKF bundle and report deterministic findings.",
@@ -94,7 +117,7 @@ export function globalHelp(): unknown {
     usage: "lore <command> [options]",
     bundle_resolution: ["--bundle <path>", "OKF_BUNDLE", "current working directory"],
     commands: commands.map(({ name, usage, summary }) => ({ name, usage, summary })),
-    options: [helpOption()],
+    options: [helpOption(), { flag: "--version", description: "Print only the Lore version." }],
   };
 }
 

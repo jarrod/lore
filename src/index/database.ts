@@ -3,8 +3,7 @@ import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema";
-
-export const TOOL_VERSION = "0.1.0";
+import { TOOL_VERSION } from "../version";
 
 export function cachePath(bundle: string): string {
   const hash = new Bun.CryptoHasher("sha256").update(bundle).digest("hex").slice(0, 24);
@@ -23,18 +22,22 @@ export function openDatabase(bundle: string, rebuild = false): { db: Database; p
   const dbPath = cachePath(bundle);
   mkdirSync(path.dirname(dbPath), { recursive: true });
   if (rebuild) removeDatabaseFiles(dbPath);
-  let rebuilt = rebuild || !existsSync(dbPath);
+  const existed = existsSync(dbPath);
+  let rebuilt = rebuild || !existed;
   let db = new Database(dbPath, { create: true });
-  db.run("PRAGMA journal_mode = WAL");
-  db.run("PRAGMA busy_timeout = 5000");
-  db.exec(SCHEMA_SQL);
-  const version = db.query("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string } | null;
-  if (version && version.value !== SCHEMA_VERSION) {
+  let incompatible = false;
+  try {
+    initializeDatabase(db);
+    incompatible = existed && !rebuild && !hasCurrentSchema(db);
+  } catch (error) {
+    if (!existed || rebuild) { db.close(); throw error; }
+    incompatible = true;
+  }
+  if (incompatible) {
     db.close();
     removeDatabaseFiles(dbPath);
     db = new Database(dbPath, { create: true });
-    db.run("PRAGMA journal_mode = WAL");
-    db.exec(SCHEMA_SQL);
+    initializeDatabase(db);
     rebuilt = true;
   }
   const upsert = db.query("INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value");
@@ -42,6 +45,25 @@ export function openDatabase(bundle: string, rebuild = false): { db: Database; p
   upsert.run("tool_version", TOOL_VERSION);
   upsert.run("bundle_path", bundle);
   return { db, path: dbPath, rebuilt };
+}
+
+function initializeDatabase(db: Database): void {
+  db.run("PRAGMA journal_mode = WAL");
+  db.run("PRAGMA busy_timeout = 5000");
+  db.exec(SCHEMA_SQL);
+}
+
+function hasCurrentSchema(db: Database): boolean {
+  const version = db.query("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string } | null;
+  if (version?.value !== SCHEMA_VERSION) return false;
+  try {
+    db.query("SELECT id,path,type,title,description,status,trust,stale_after,hash,mtime_ms,size_bytes FROM concept LIMIT 0").all();
+    db.query("SELECT id,title,description,tags,body FROM concept_fts LIMIT 0").all();
+    db.query("SELECT src,rel,dst,origin FROM edge LIMIT 0").all();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function removeDatabaseFiles(dbPath: string): void {

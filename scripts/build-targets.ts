@@ -12,7 +12,7 @@ const targets = [
 mkdirSync("dist", { recursive: true });
 for (const [target, filename] of targets) {
   const child = Bun.spawnSync([
-    "bun", "build", "--compile", `--target=${target}`,
+    "bun", "build", "--compile", "--define", "__LORE_COMPILED__=true", `--target=${target}`,
     `--outfile=${path.join("dist", filename)}`, "src/cli.ts",
   ], { stdout: "inherit", stderr: "inherit" });
   if (child.exitCode !== 0) process.exit(child.exitCode);
