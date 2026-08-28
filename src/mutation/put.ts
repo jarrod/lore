@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, realpath, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 import { openDatabase } from "../index/database";
@@ -24,7 +24,7 @@ export async function runPut(bundle: string, args: string[]): Promise<unknown> {
   if (!id) throw invalidArgument("put requires a concept ID");
   ensureNoArgs(args);
   let request: PutRequest;
-  try { request = JSON.parse(await Bun.stdin.text()) as PutRequest; }
+  try { request = JSON.parse(readFileSync(process.stdin.fd, "utf8")) as PutRequest; }
   catch { throw invalidArgument("put requires a valid JSON request on stdin"); }
   return putConcept(bundle, id, request);
 }
