@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = "2";
+export const SCHEMA_VERSION = "3";
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS concept (
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS concept (
   size_bytes INTEGER
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS concept_fts USING fts5(
-  id UNINDEXED,
+  id,
   title,
   description,
   tags,

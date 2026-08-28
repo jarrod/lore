@@ -8,7 +8,7 @@ import { refreshIndex } from "../index/refresh";
 import { findConcepts } from "../index/search";
 import { graphTraversal, shortestPath, type Direction } from "../index/graph";
 import { assertBundlePath, conceptPath, validateConceptId } from "../okf/ids";
-import { splitDocument, trustTier } from "../okf/frontmatter";
+import { effectiveStatus, splitDocument, trustTier } from "../okf/frontmatter";
 import { extractSection } from "../okf/markdown";
 import { invalidArgument, notFound } from "../protocol/errors";
 import { ensureNoArgs, takeFlag, takeOption } from "./options";
@@ -79,10 +79,10 @@ export async function runGet(bundle: string, args: string[]): Promise<unknown> {
   const content = await readFile(resolvedPath, "utf8");
   const parsed = splitDocument(content, id);
   const hash = new Bun.CryptoHasher("sha256").update(content).digest("hex");
-  if (!section) return { id, hash, trust: trustTier(parsed.frontmatter), frontmatter: parsed.frontmatter, body: parsed.body };
+  if (!section) return { id, hash, trust: trustTier(parsed.frontmatter), effective_status: effectiveStatus(parsed.frontmatter), frontmatter: parsed.frontmatter, body: parsed.body };
   const body = extractSection(parsed.body, section);
   if (body === undefined) throw notFound("SECTION_NOT_FOUND", "Section does not exist", { id, section });
-  return { id, hash, trust: trustTier(parsed.frontmatter), frontmatter: parsed.frontmatter, section, body };
+  return { id, hash, trust: trustTier(parsed.frontmatter), effective_status: effectiveStatus(parsed.frontmatter), frontmatter: parsed.frontmatter, section, body };
 }
 
 export async function runGraph(bundle: string, args: string[]): Promise<unknown> {
@@ -105,7 +105,7 @@ export async function runGraph(bundle: string, args: string[]): Promise<unknown>
     requireConcept(db, root);
     if (to) {
       requireConcept(db, to);
-      return { root, target: to, ...shortestPath(db, root, to, rel) };
+      return { root, target: to, ...shortestPath(db, root, to, { direction, rel, maxDepth: depthRaw === undefined ? 8 : depth }) };
     }
     return { root, ...graphTraversal(db, root, direction, depth, rel) };
   } finally { db.close(); }

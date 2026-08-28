@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a scoped improvement to Lore
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the concrete limitation or unmet use case.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the capability without prescribing unnecessary implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility considerations
+      description: Note effects on OKF portability, the CLI protocol, or existing bundles.
+    validations:
+      required: true

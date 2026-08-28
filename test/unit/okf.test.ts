@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { validateConceptId } from "../../src/okf/ids";
 import { effectiveStatus, splitDocument, serializeDocument, trustTier, isStale } from "../../src/okf/frontmatter";
-import { extractMarkdownEdges, extractSection, extractTypedEdges } from "../../src/okf/markdown";
+import { extractMarkdownEdges, extractOkfEdges, extractSection, extractTypedEdges, unsafeOkfTargets } from "../../src/okf/markdown";
 import { naturalFtsQuery } from "../../src/index/search";
 import { browserCommand, safeFilename } from "../../src/commands/visualise";
 import { renderVisualisation } from "../../src/visualisation/html";
@@ -44,7 +44,7 @@ describe("OKF primitives", () => {
     expect(trustTier({ type: "X", verified: { by: "process:ci", at: "2026-01-01" } })).toBe("machine_confirmed");
     expect(trustTier({ type: "X", verified: [{ by: "human:j", at: "2026-01-01" }] })).toBe("human_reviewed");
     expect(isStale({ type: "X", stale_after: "2020-01-01" }, "2020-01-01")).toBeTrue();
-    expect(effectiveStatus({ type: "X" })).toBeNull();
+    expect(effectiveStatus({ type: "X" })).toBe("stable");
     expect(effectiveStatus({ type: "X", status: "reviewed" })).toBe("reviewed");
   });
 
@@ -53,6 +53,24 @@ describe("OKF primitives", () => {
       .toEqual([{ rel: "links_to", dst: "systems/okta", origin: "markdown" }]);
     expect(extractTypedEdges({ type: "X", "x-okf": { rel: [["depends_on", "systems/okta"]] } }))
       .toEqual([{ rel: "depends_on", dst: "systems/okta", origin: "typed" }]);
+  });
+
+  test("extracts standard OKF path relationships", () => {
+    const frontmatter = {
+      type: "Attested Computation",
+      resource: "../systems/okta.md",
+      sources: [{ resource: "/references/policy.md" }, { resource: "https://example.test/source" }],
+      computation: "./query.md",
+      executor: { resource: "../references/runner.md" },
+      attester: { resource: "../../escape.md" },
+    };
+    expect(extractOkfEdges(frontmatter, "computations/revenue")).toEqual([
+      { rel: "resource", dst: "systems/okta", origin: "okf" },
+      { rel: "computation", dst: "computations/query", origin: "okf" },
+      { rel: "executor", dst: "references/runner", origin: "okf" },
+      { rel: "source", dst: "references/policy", origin: "okf" },
+    ]);
+    expect(unsafeOkfTargets(frontmatter, "computations/revenue")).toEqual(["../../escape.md"]);
   });
 
   test("extracts a section with descendants", () => {

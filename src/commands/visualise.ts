@@ -10,7 +10,7 @@ import { renderVisualisation } from "../visualisation/html";
 import { ensureNoArgs, takeFlag, takeOption } from "./options";
 
 const DEFAULT_MAX_NODES = 500;
-const MAX_MAX_NODES = 5000;
+const MAX_MAX_NODES = 1000;
 
 export async function runVisualise(bundle: string, args: string[]): Promise<unknown> {
   const root = args[0] && !args[0]!.startsWith("--") ? args.shift() : undefined;

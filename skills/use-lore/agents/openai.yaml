@@ -1,4 +1,4 @@
 interface:
-  display_name: "Lore Knowledge"
-  short_description: "Store and work with repository knowledge using Lore"
-  default_prompt: "Use $use-lore to work with this repository's knowledge without imposing a subject-matter taxonomy."
+  display_name: "Use Lore"
+  short_description: "Operate a repository-local Lore knowledge bundle"
+  default_prompt: "Use $use-lore as the operational interface to this repository's Lore bundle, preserving the knowledge policy supplied by the consumer."

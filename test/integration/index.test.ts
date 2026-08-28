@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Database } from "bun:sqlite";
@@ -33,7 +33,7 @@ describe("derived index", () => {
     expect(first.edges).toBe(9);
     const results = findConcepts(opened.db, "customer identity", { limit: 10 }) as Array<{ id: string; status: string | null; trust: string }>;
     expect(results[0]?.id).toBe("capabilities/customer-identity");
-    expect(results[0]?.status).toBeNull();
+    expect(results[0]?.status).toBe("stable");
     expect(results[0]?.trust).toBe("unverified");
     expect((findConcepts(opened.db, "customer", { tag: "identity" }) as Array<{ id: string }>).map((row) => row.id)).toEqual(["capabilities/customer-identity"]);
     expect((findConcepts(opened.db, "identity", { type: "Team", scope: "teams" }) as Array<{ id: string }>)[0]?.id).toBe("teams/identity");
@@ -44,6 +44,7 @@ describe("derived index", () => {
     expect(bundleGraph(opened.db, "owned_by").nodes.map((node) => node.id)).toEqual(["capabilities/customer-identity", "teams/identity"]);
     const pathResult = shortestPath(opened.db, "capabilities/payments", "systems/okta");
     expect(pathResult.found).toBeTrue();
+    expect((findConcepts(opened.db, "customer absentterm", { limit: 10 }) as Array<{ id: string }>).some((row) => row.id === "capabilities/customer-identity")).toBeTrue();
     const idsBefore = results.map((result) => result.id);
     const addedPath = path.join(bundle, "systems", "temporary.md");
     writeFileSync(addedPath, "---\ntype: System\ntitle: Temporary\n---\n# Temporary\n");
@@ -52,6 +53,46 @@ describe("derived index", () => {
     expect((await refreshIndex(opened.db, bundle)).updated).toBe(1);
     unlinkSync(addedPath);
     expect((await refreshIndex(opened.db, bundle)).deleted).toBe(1);
+
+    const minimalPath = path.join(bundle, "minimal-only.md");
+    writeFileSync(minimalPath, "---\ntype: Concept\n---\n");
+    await refreshIndex(opened.db, bundle);
+    expect((findConcepts(opened.db, "minimal", {}) as Array<{ id: string }>)[0]?.id).toBe("minimal-only");
+    unlinkSync(minimalPath);
+    await refreshIndex(opened.db, bundle);
+
+    const lineagePath = path.join(bundle, "lineage.md");
+    writeFileSync(lineagePath, "---\ntype: Concept\nresource: systems/okta.md\nsources:\n  - resource: capabilities/customer-identity.md\ncomputation: decisions/identity-provider.md\nexecutor:\n  resource: teams/identity.md\nattester:\n  resource: systems/payment-api.md\n---\n# Lineage\n");
+    await refreshIndex(opened.db, bundle);
+    const lineage = graphTraversal(opened.db, "lineage", "out", 1);
+    expect(lineage.edges.filter((edge) => edge.origin === "okf")).toHaveLength(5);
+    unlinkSync(lineagePath);
+    await refreshIndex(opened.db, bundle);
+
+    const pathDirectory = path.join(bundle, "paths");
+    mkdirSync(pathDirectory);
+    writeFileSync(path.join(pathDirectory, "a.md"), "---\ntype: Concept\nx-okf:\n  rel:\n    - [next, paths/b]\n---\n");
+    writeFileSync(path.join(pathDirectory, "b.md"), "---\ntype: Concept\nx-okf:\n  rel:\n    - [next, paths/c]\n---\n");
+    writeFileSync(path.join(pathDirectory, "c.md"), "---\ntype: Concept\n---\n");
+    await refreshIndex(opened.db, bundle);
+    expect(shortestPath(opened.db, "paths/a", "paths/c", { direction: "out", maxDepth: 1 }).found).toBeFalse();
+    expect(shortestPath(opened.db, "paths/a", "paths/c", { direction: "out", maxDepth: 2 }).found).toBeTrue();
+    expect(shortestPath(opened.db, "paths/a", "paths/c", { direction: "in", maxDepth: 8 }).found).toBeFalse();
+    rmSync(pathDirectory, { recursive: true });
+    await refreshIndex(opened.db, bundle);
+
+    const freshnessPath = path.join(bundle, "freshness.md");
+    const fixed = new Date("2026-01-01T00:00:00Z");
+    writeFileSync(freshnessPath, "---\ntype: Note\n---\noldtoken\n");
+    utimesSync(freshnessPath, fixed, fixed);
+    await refreshIndex(opened.db, bundle);
+    writeFileSync(freshnessPath, "---\ntype: Note\n---\nnewtoken\n");
+    utimesSync(freshnessPath, fixed, fixed);
+    expect((await refreshIndex(opened.db, bundle)).updated).toBe(1);
+    expect(findConcepts(opened.db, "newtoken", {})).toHaveLength(1);
+    expect(findConcepts(opened.db, "oldtoken", {})).toHaveLength(0);
+    unlinkSync(freshnessPath);
+    await refreshIndex(opened.db, bundle);
     opened.db.close();
     opened = openDatabase(bundle, true);
     await refreshIndex(opened.db, bundle);

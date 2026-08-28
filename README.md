@@ -1,5 +1,9 @@
 # Lore
 
+[![CI](https://github.com/jarrod/lore/actions/workflows/test.yml/badge.svg)](https://github.com/jarrod/lore/actions/workflows/test.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/jarrod/lore)](https://github.com/jarrod/lore/releases/latest)
+[![License](https://img.shields.io/github/license/jarrod/lore)](LICENSE)
+
 Lore is a small, agent-native command-line runtime for [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundles.
 
 OKF Markdown and YAML remain authoritative. Lore builds a disposable SQLite cache for FTS5/BM25 search, backlinks, typed graph relationships, traversal, and incremental indexing. It embeds no LLM, server, network service, or external database.
@@ -98,9 +102,10 @@ lore index [--rebuild]
 lore find <query> [--type T] [--tag T] [--status S] [--scope ID] [--limit N]
 lore get <concept-id> [--section HEADING]
 lore graph <concept-id> [--direction in|out|both] [--depth 1..8] [--rel R] [--to ID]
-lore visualise [<concept-id>] [--direction in|out|both] [--depth 1..8] [--rel R] [--max-nodes 1..5000] [--output PATH] [--open]
+lore visualise [<concept-id>] [--direction in|out|both] [--depth 1..8] [--rel R] [--max-nodes 1..1000] [--output PATH] [--open]
 lore put <concept-id> < request.json
 lore status <concept-id> <status> [--expected-hash HASH]
+lore reset --knowledge --bundle PATH [--no-backup] [--confirm TOKEN]
 lore check [--strict]
 ```
 
@@ -109,6 +114,8 @@ Help is returned as a successful, machine-readable JSON response and does not re
 Every knowledge command operates on one bundle. Resolution order is `--bundle`, `OKF_BUNDLE`, then the current directory. Lore never walks parent directories.
 
 `OKF_BUNDLE` is optional. It is only a shortcut for selecting a bundle without repeating `--bundle`; it does not control where Lore stores knowledge. For ordinary software repositories, do not use the repository root as the bundle because unrelated Markdown files such as `README.md` are not OKF concepts.
+
+`find` searches concept IDs, titles, descriptions, tags, and bodies. Multi-term searches rank concepts matching every term first, then fill unused result slots with broader any-term matches. `get` preserves raw frontmatter and also reports derived trust and `effective_status`; an absent status is effectively `stable`. With `graph --to`, explicit direction and depth options constrain the shortest path, while an omitted path depth defaults to 8.
 
 Success is compact JSON on stdout:
 
@@ -126,7 +133,7 @@ Exit codes are `0` success, `2` invalid arguments, `3` invalid OKF, `4` not foun
 
 ## Typed relationships
 
-Normal Markdown links become `links_to` graph edges. Optional typed relationships use the conformant extension:
+Normal Markdown links become `links_to` graph edges. Internal concept paths in standard OKF `resource`, `sources[].resource`, `computation`, `executor.resource`, and `attester.resource` fields become graph edges with `origin: okf`. Optional typed relationships use the conformant extension:
 
 ```yaml
 x-okf:
@@ -147,11 +154,13 @@ lore visualise knowledge/example --direction both --depth 2 --open
 lore visualise --rel related_to --output .lore/visualisations/related.html
 ```
 
-The command returns the absolute output path and graph counts as compact JSON. It refuses graphs above 500 nodes by default instead of producing a misleading partial view; use `--max-nodes` to explicitly raise the limit up to 5000. Generated files belong outside the authoritative bundle and are ignored under `.lore/visualisations/`.
+The command returns the absolute output path and graph counts as compact JSON. It refuses graphs above 500 nodes by default instead of producing a misleading partial view; use `--max-nodes` to explicitly raise the limit up to 1000. Generated files belong outside the authoritative bundle and are ignored under `.lore/visualisations/`.
 
 ## Knowledge structure
 
-Lore requires a non-empty concept `type`, but does not prescribe a type vocabulary, folder hierarchy, body template, relationship ontology, or set of lifecycle status values. Unknown YAML frontmatter is preserved. An absent lifecycle status remains unspecified, while absent verification is reported as `unverified`.
+Lore requires a non-empty concept `type`, but does not prescribe a type vocabulary, folder hierarchy, body template, or relationship ontology. Unknown YAML frontmatter is preserved. OKF lifecycle values are `draft`, `stable`, and `deprecated`; an absent status has the effective value `stable`. Absent verification is reported as `unverified`.
+
+`index.md` and `log.md` remain recognised as optional reserved OKF files for compatibility with existing portable bundles. Lore excludes them from concepts, search, and graph indexing. New repository-local bundles and reset bundles are empty; Lore does not create either reserved file automatically.
 
 Bundles may store an evolving ontology as ordinary concepts. That ontology remains user-owned and advisory: Lore does not reject otherwise valid knowledge merely because it is not classified by the ontology.
 
@@ -171,17 +180,48 @@ Bundles may store an evolving ontology as ordinary concepts. That ontology remai
 
 Use either `body` or `body_file`. Merge preserves omitted frontmatter, unknown extensions, provenance, verification, generated metadata, and the existing body. Replace requires `allow_destructive: true`. Writes are validated and atomic; Lore does not rewrite `index.md` or `log.md`.
 
+A successful mutation reports `index.current`. When false, the authoritative Markdown write committed successfully but the disposable cache could not refresh; run the reported recovery command after correcting any invalid bundle content.
+
 For a lifecycle-only change, use the dedicated deterministic command with the current hash returned by `get`:
 
 ```bash
-lore status knowledge/example reviewed --expected-hash HASH
+lore status knowledge/example stable --expected-hash HASH
 ```
 
-Status values are user-defined. The command preserves the concept body and all other frontmatter.
+The command accepts the OKF lifecycle values `draft`, `stable`, and `deprecated`, and preserves the concept body and all other frontmatter. Store user-defined workflow states in a namespaced extension instead of overloading the standard `status` field.
+
+## Reset knowledge
+
+`reset --knowledge` clears the complete authoritative bundle while preserving the installed Lore executable. Reset is recoverable and requires a state-derived confirmation token. First preview the exact bundle that would be reset:
+
+```bash
+lore reset --knowledge --bundle .lore/knowledge
+```
+
+The successful JSON response reports the canonical bundle path, concept and file counts, byte count, and `confirmation_token`. The preview does not modify any files. To perform the reset, pass that token back unchanged:
+
+```bash
+lore reset --knowledge --confirm TOKEN --bundle .lore/knowledge
+```
+
+Lore rejects a stale or incorrect token with exit code 5. A confirmed reset moves the complete previous bundle to `.lore/backups/knowledge-<timestamp>-<token-prefix>`, creates a fresh empty bundle, and deletes and rebuilds the derived SQLite database, including its WAL and SHM files. The response reports the backup path and removed counts. Repository-local `init` configuration ignores `.lore/backups/` so recoverable copies are not committed accidentally.
+
+For safety, reset always requires an explicit `--bundle`. It does not use `OKF_BUNDLE` or the current-directory fallback accepted by other knowledge commands.
+
+To permanently reset without retaining a backup, include `--no-backup` in both the preview and confirmed commands:
+
+```bash
+lore reset --knowledge --no-backup --bundle .lore/knowledge
+lore reset --knowledge --no-backup --confirm TOKEN --bundle .lore/knowledge
+```
+
+The confirmation token is bound to the selected reset mode. A token from a recoverable preview cannot authorize `--no-backup`, and vice versa. The permanent response reports `mode: "permanent"` and `recoverable: false`; the removed knowledge cannot be restored by Lore.
+
+Resetting is a destructive operation even though Lore creates a backup. Inspect the canonical bundle and counts from the preview before confirming it. Delete the backup manually only after the new empty bundle has been verified.
 
 ## Development
 
-Requires Bun 1.3.14 for development only:
+Requires Bun 1.4.0 for development only:
 
 ```bash
 bun install --frozen-lockfile
@@ -202,9 +242,15 @@ To initialize another development repository, pass the normal `init` option thro
 bun run dev:setup -- --repo /path/to/repository
 ```
 
-## Agent skill
+## Agent integration
 
-The canonical agent skill is versioned at [`skills/use-lore`](skills/use-lore). It teaches a skill-capable agent to use Lore for storage, retrieval, graph traversal, validation, and guarded mutation without imposing a subject-matter taxonomy or duplicating Lore's deterministic behavior.
+The operational [`use-lore`](skills/use-lore) skill teaches a skill-capable agent how to invoke Lore, interpret its protocol, and mutate bundles safely. It deliberately contains no knowledge-extraction, taxonomy, document-structure, or writing policy.
+
+Consumers should provide their own knowledge-worker skill or workflow when they need decisions about source analysis, concept boundaries, classification, organization, prose, citations, or relationship vocabulary. That consumer policy calls `use-lore`, which calls the deterministic binary:
+
+```text
+consumer knowledge-worker policy -> use-lore -> Lore binary -> portable OKF bundle
+```
 
 Install the whole `skills/use-lore` directory into the target agent's skill search path, either by copying it or linking back to this checkout. For example:
 
@@ -228,10 +274,10 @@ Initialization creates:
 <repository>/.lore/
 ├── bin/lore          # repository-local compiled executable
 ├── cache/            # disposable SQLite state
-├── knowledge/        # authoritative, portable OKF Markdown
-│   └── index.md
+├── knowledge/        # authoritative, portable OKF Markdown; initially empty
+├── backups/          # recoverable pre-reset bundles, created on demand
 ├── visualisations/   # disposable HTML graphs, created on demand
-└── .gitignore        # ignores bin/, cache/, and visualisations/
+└── .gitignore        # ignores bin/, cache/, backups/, and visualisations/
 ```
 
 The agent invokes the repository-local binary with:
@@ -243,6 +289,10 @@ OKF_CACHE_DIR=/path/to/repository/.lore/cache \
 ```
 
 The project-local `.lore/knowledge` convention removes the need to set `OKF_BUNDLE`. Keep `OKF_BUNDLE` only when intentionally pointing Lore at an external or shared bundle.
+
+## Contributing and support
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request and follow the [Code of Conduct](CODE_OF_CONDUCT.md). Use [GitHub Issues](https://github.com/jarrod/lore/issues) for reproducible defects and scoped feature requests, and [GitHub Discussions](https://github.com/jarrod/lore/discussions) for usage questions or broader design conversation. Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## Releases
 
@@ -256,3 +306,7 @@ git push origin v0.1.0
 ```
 
 The release workflow builds and smoke-tests Linux x64/ARM64, macOS Intel/ARM64, and Windows x64 binaries on matching GitHub-hosted runners. It publishes those five binaries and `SHA256SUMS` to the resulting GitHub Release.
+
+## License
+
+Lore is licensed under the [Apache License 2.0](LICENSE).

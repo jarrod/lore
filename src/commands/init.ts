@@ -33,9 +33,6 @@ export function runInit(args: string[]): unknown {
   const installed = installSelf(binary);
   ensureIgnoreFile(path.join(loreRoot, ".gitignore"));
 
-  const index = path.join(bundle, "index.md");
-  if (!existsSync(index)) writeFileSync(index, "# Knowledge\n");
-
   return { repository, binary, bundle, cache, installed };
 }
 
@@ -86,7 +83,7 @@ function replaceFile(source: string, destination: string): void {
 }
 
 function ensureIgnoreFile(ignorePath: string): void {
-  const required = ["/bin/", "/cache/", "/visualisations/"];
+  const required = ["/bin/", "/cache/", "/visualisations/", "/backups/"];
   const existing = existsSync(ignorePath)
     ? readFileSync(ignorePath, "utf8").split(/\r?\n/).filter(Boolean)
     : [];

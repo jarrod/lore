@@ -45,7 +45,7 @@ const commands: CommandHelp[] = [
     options: [
       { flag: "--type", value: "<type>", description: "Require an exact concept type." },
       { flag: "--tag", value: "<tag>", description: "Require a matching tag." },
-      { flag: "--status", value: "<status>", description: "Require an explicitly recorded lifecycle status." },
+      { flag: "--status", value: "<status>", description: "Require the effective OKF lifecycle status; absent status is stable." },
       { flag: "--scope", value: "<concept-id>", description: "Limit results to a concept or directory prefix." },
       { flag: "--limit", value: "<1..100>", description: "Limit returned results; defaults to 20." },
       bundleOption,
@@ -70,7 +70,7 @@ const commands: CommandHelp[] = [
     arguments: [{ name: "concept-id", required: true, description: "Canonical starting concept ID." }],
     options: [
       { flag: "--direction", value: "<in|out|both>", description: "Choose edge direction; defaults to both." },
-      { flag: "--depth", value: "<1..8>", description: "Maximum traversal depth; defaults to 1." },
+      { flag: "--depth", value: "<1..8>", description: "Maximum depth; defaults to 1 for traversal and 8 for shortest paths." },
       { flag: "--rel", value: "<relationship>", description: "Restrict traversal to one relationship." },
       { flag: "--to", value: "<concept-id>", description: "Find a shortest path to another concept." },
       bundleOption,
@@ -79,14 +79,14 @@ const commands: CommandHelp[] = [
   },
   {
     name: "visualise",
-    usage: "lore visualise [<concept-id>] [--direction <in|out|both>] [--depth <1..8>] [--rel <relationship>] [--max-nodes <1..5000>] [--output <path>] [--open] [--bundle <path>]",
+    usage: "lore visualise [<concept-id>] [--direction <in|out|both>] [--depth <1..8>] [--rel <relationship>] [--max-nodes <1..1000>] [--output <path>] [--open] [--bundle <path>]",
     summary: "Generate a self-contained interactive HTML knowledge graph.",
     arguments: [{ name: "concept-id", required: false, description: "Optional canonical root concept ID; omit it for the complete bundle." }],
     options: [
       { flag: "--direction", value: "<in|out|both>", description: "Choose rooted edge direction; defaults to both." },
       { flag: "--depth", value: "<1..8>", description: "Choose rooted traversal depth; defaults to 1." },
       { flag: "--rel", value: "<relationship>", description: "Restrict the visualisation to one relationship." },
-      { flag: "--max-nodes", value: "<1..5000>", description: "Refuse larger graphs; defaults to 500." },
+      { flag: "--max-nodes", value: "<1..1000>", description: "Refuse larger graphs; defaults to 500." },
       { flag: "--output", value: "<path>", description: "Write to this file instead of .lore/visualisations/." },
       { flag: "--open", description: "Open the generated file in the default browser." },
       bundleOption,
@@ -106,11 +106,23 @@ const commands: CommandHelp[] = [
     summary: "Set one concept's lifecycle status without changing its other content.",
     arguments: [
       { name: "concept-id", required: true, description: "Canonical destination concept ID." },
-      { name: "status", required: true, description: "User-defined non-empty lifecycle status." },
+      { name: "status", required: true, description: "OKF lifecycle status: draft, stable, or deprecated." },
     ],
     options: [
       { flag: "--expected-hash", value: "<hash>", description: "Reject the update unless the current content hash matches." },
       bundleOption,
+      helpOption(),
+    ],
+  },
+  {
+    name: "reset",
+    usage: "lore reset --knowledge --bundle <path> [--no-backup] [--confirm <token>]",
+    summary: "Preview or perform a guarded reset of all authoritative knowledge and derived SQLite state.",
+    options: [
+      { flag: "--knowledge", description: "Select the complete authoritative knowledge bundle for reset." },
+      { flag: "--no-backup", description: "Permanently delete the previous bundle after reset instead of retaining a backup." },
+      { flag: "--confirm", value: "<token>", description: "Perform the reset using the token returned by an unchanged preview." },
+      { ...bundleOption, description: "Required explicit path to the authoritative bundle; environment and current-directory fallbacks are disabled." },
       helpOption(),
     ],
   },

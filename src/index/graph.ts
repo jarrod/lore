@@ -4,6 +4,7 @@ import { compareStrings } from "../okf/ids";
 export type Direction = "in" | "out" | "both";
 export interface GraphEdge { from: string; rel: string; to: string; origin: string }
 export interface GraphNode { id: string; type?: string; title?: string | null; status?: string | null; trust?: string; missing?: true }
+export interface PathOptions { direction?: Direction; rel?: string; maxDepth?: number }
 
 export function bundleGraph(db: Database, rel?: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const params = rel ? [rel] : [];
@@ -40,7 +41,8 @@ export function graphTraversal(db: Database, root: string, direction: Direction,
   return { nodes: nodeMetadata(db, [...visited]), edges: [...edgeMap.values()].sort(compareEdges) };
 }
 
-export function shortestPath(db: Database, from: string, to: string, rel?: string, maxDepth = 8): { found: boolean; nodes: GraphNode[]; edges: GraphEdge[] } {
+export function shortestPath(db: Database, from: string, to: string, options: PathOptions = {}): { found: boolean; nodes: GraphNode[]; edges: GraphEdge[] } {
+  const { direction = "both", rel, maxDepth = 8 } = options;
   if (from === to) return { found: true, nodes: nodeMetadata(db, [from]), edges: [] };
   const visited = new Set([from]);
   let frontier = [from];
@@ -48,7 +50,7 @@ export function shortestPath(db: Database, from: string, to: string, rel?: strin
   for (let level = 0; level < maxDepth && frontier.length; level++) {
     const next: string[] = [];
     for (const id of frontier.sort()) {
-      for (const edge of adjacent(db, id, "both", rel)) {
+      for (const edge of adjacent(db, id, direction, rel)) {
         const neighbour = edge.from === id ? edge.to : edge.from;
         if (visited.has(neighbour)) continue;
         visited.add(neighbour); parent.set(neighbour, { previous: id, edge }); next.push(neighbour);

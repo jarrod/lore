@@ -82,7 +82,7 @@ export function renderVisualisation(graph: VisualisationGraph): string {
   function endPointer(){drag=null;pan=null;}svg.addEventListener('pointerup',endPointer);svg.addEventListener('pointercancel',endPointer);
   search.addEventListener('input',applySearch);labels.addEventListener('change',render);document.getElementById('reset').addEventListener('click',reset);
   types.forEach(function(type,index){var item=document.createElement('span'),swatch=document.createElement('i');swatch.className='swatch';swatch.style.background='var(--type-'+(index%8)+')';item.appendChild(swatch);item.appendChild(document.createTextNode(type));legend.appendChild(item);});
-  [['Typed',''],['Markdown','markdown']].forEach(function(entry){var item=document.createElement('span'),line=document.createElement('i');line.className='line-swatch '+entry[1];item.appendChild(line);item.appendChild(document.createTextNode(entry[0]));legend.appendChild(item);});
+  [['Typed',''],['OKF metadata','okf'],['Markdown','markdown']].forEach(function(entry){var item=document.createElement('span'),line=document.createElement('i');line.className='line-swatch '+entry[1];item.appendChild(line);item.appendChild(document.createTextNode(entry[0]));legend.appendChild(item);});
   document.getElementById('summary').textContent=nodes.length+' concepts · '+edges.length+' relationships'+(data.root?' · rooted at '+data.root:'');
   render();
 })();

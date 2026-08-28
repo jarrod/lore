@@ -3,7 +3,7 @@ import { existsSync, realpathSync, statSync } from "node:fs";
 import { invalidArgument, invalidOkf, notFound } from "../protocol/errors";
 import { compareStrings, idFromRelativePath } from "./ids";
 import { splitDocument, type Frontmatter } from "./frontmatter";
-import { extractMarkdownEdges, extractTypedEdges, type EdgeInput } from "./markdown";
+import { extractMarkdownEdges, extractOkfEdges, extractTypedEdges, type EdgeInput } from "./markdown";
 
 export interface Concept {
   id: string;
@@ -29,7 +29,7 @@ export async function loadConcept(bundle: string, relative: string): Promise<Con
   let typedEdges;
   try { typedEdges = extractTypedEdges(parsed.frontmatter); }
   catch (error) { throw invalidOkf("Concept has malformed x-okf.rel", { source: relative, reason: error instanceof Error ? error.message : String(error) }); }
-  const edges = [...extractMarkdownEdges(parsed.body, id), ...typedEdges];
+  const edges = [...extractMarkdownEdges(parsed.body, id), ...extractOkfEdges(parsed.frontmatter, id), ...typedEdges];
   return { id, path: relative.split(path.sep).join("/"), absolutePath, ...parsed, hash, mtimeMs: stat.mtimeMs, sizeBytes: stat.size, edges };
 }
 

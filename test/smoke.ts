@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -45,7 +45,8 @@ try {
   if (initData.ok !== true || initData.data?.installed !== true) throw new Error("init did not install the standalone executable");
   const localBinary = initData.data.binary;
   if (!localBinary || !existsSync(localBinary)) throw new Error("init did not create the repository-local executable");
-  if (!initData.data.bundle || !existsSync(path.join(initData.data.bundle, "index.md"))) throw new Error("init did not create the knowledge bundle");
+  if (!initData.data.bundle || !existsSync(initData.data.bundle)) throw new Error("init did not create the knowledge bundle");
+  if (readdirSync(initData.data.bundle).length !== 0) throw new Error("init did not create an empty knowledge bundle");
   if (!initData.data.cache || !existsSync(initData.data.cache)) throw new Error("init did not create the cache directory");
   const ignore = path.join(initializedRepository, ".lore", ".gitignore");
   writeFileSync(ignore, `${readFileSync(ignore, "utf8")}custom-entry\n`);
@@ -59,6 +60,7 @@ try {
   if (repeatedData.ok !== true || repeatedData.data?.installed !== false) throw new Error("init was not idempotent");
   if (!readFileSync(ignore, "utf8").includes("custom-entry")) throw new Error("init did not preserve existing ignore entries");
   if (!readFileSync(ignore, "utf8").includes("/visualisations/")) throw new Error("init did not ignore generated visualisations");
+  if (!readFileSync(ignore, "utf8").includes("/backups/")) throw new Error("init did not ignore recoverable knowledge backups");
 
   for (const args of commands) {
     const child = Bun.spawnSync([binary, ...args, "--bundle", bundle], {

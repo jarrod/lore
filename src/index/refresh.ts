@@ -1,6 +1,5 @@
 import type { Database } from "bun:sqlite";
 import path from "node:path";
-import { stat } from "node:fs/promises";
 import { loadConcept } from "../okf/bundle";
 import { effectiveStatus, trustTier } from "../okf/frontmatter";
 
@@ -20,6 +19,7 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
   const previous = new Map(previousRows.map((row) => [row.path, row]));
   const seen = new Set<string>();
   const changed: Awaited<ReturnType<typeof loadConcept>>[] = [];
+  const unchangedMetadata: Array<{ id: string; mtimeMs: number; sizeBytes: number }> = [];
   let added = 0;
   let updated = 0;
   let unchanged = 0;
@@ -32,14 +32,9 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
     if (name === "index.md" || name === "log.md") continue;
     seen.add(relative);
     const prior = previous.get(relative);
-    const fileStat = await stat(path.join(bundle, relative));
-    if (prior && prior.mtime_ms === fileStat.mtimeMs && prior.size_bytes === fileStat.size) {
-      unchanged++;
-      continue;
-    }
     const concept = await loadConcept(bundle, relative);
     if (prior && prior.hash === concept.hash) {
-      db.query("UPDATE concept SET mtime_ms=?, size_bytes=? WHERE id=?").run(concept.mtimeMs, concept.sizeBytes, concept.id);
+      unchangedMetadata.push({ id: concept.id, mtimeMs: concept.mtimeMs, sizeBytes: concept.sizeBytes });
       unchanged++;
       continue;
     }
@@ -48,6 +43,8 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
   }
   const deletedRows = previousRows.filter((row) => !seen.has(row.path));
   const transaction = db.transaction(() => {
+    const updateMetadata = db.query("UPDATE concept SET mtime_ms=?, size_bytes=? WHERE id=?");
+    for (const concept of unchangedMetadata) updateMetadata.run(concept.mtimeMs, concept.sizeBytes, concept.id);
     for (const row of deletedRows) {
       db.query("DELETE FROM edge WHERE src=?").run(row.id);
       db.query("DELETE FROM concept_fts WHERE id=?").run(row.id);

@@ -1,86 +1,95 @@
 ---
 name: use-lore
-description: Use a repository-local standalone Lore binary to initialize, search, retrieve, relate, validate, and safely mutate a Lore knowledge bundle. Apply when an agent needs to store or work with durable repository knowledge without imposing a subject-matter taxonomy.
+description: Operate a repository-local standalone Lore binary to initialize, query, traverse, validate, mutate, visualise, or reset an OKF knowledge bundle. Use for Lore mechanics and safety; leave knowledge extraction, classification, organization, and writing policy to the consumer.
 ---
 
 # Use Lore
 
-Use Lore as a deterministic mechanism for durable knowledge. The user owns the content, vocabulary, classifications, and relationships. Lore supplies storage, retrieval, lifecycle metadata, verification signals, graph traversal, validation, and guarded mutation.
+Use Lore as a deterministic interface to an OKF knowledge bundle. Lore owns storage mechanics, indexing, querying, graph traversal, validation, lifecycle metadata, and guarded mutation. The user or calling knowledge-worker workflow owns what knowledge means, how sources are interpreted, how many concepts are created, and how content is classified or organized.
 
-## Require the Standalone Binary
+## Locate Lore
 
 1. Determine the repository root being worked on.
-2. Use `<repo-root>/.lore/bin/lore` as the only executable location on macOS.
+2. Use `<repo-root>/.lore/bin/lore` as the executable on macOS.
 3. If it is absent, stop and tell the user to obtain a trusted standalone executable and run `<downloaded-lore> init --repo <repo-root>`.
-4. Run `<repo-root>/.lore/bin/lore --help` before using it.
+4. Run `<repo-root>/.lore/bin/lore --help` before first use. Installed help is authoritative for the binary version.
 
 Never invoke Lore's TypeScript source, Bun, Node.js, npm, a package script, compiler, `LORE_BIN`, or an executable from `PATH`. Installing this skill does not install Lore.
 
 ## Select the Bundle
 
-Use a bundle explicitly supplied by the user; otherwise use `<repo-root>/.lore/knowledge`. If repository-local Lore is installed but that bundle is absent and setup is authorized, run `<repo-root>/.lore/bin/lore init --repo <repo-root>`.
+Use a bundle explicitly supplied by the user. Otherwise use `<repo-root>/.lore/knowledge`. If repository setup is authorized and that directory is absent, initialize the repository with the standalone executable.
 
-For repository-local knowledge, run commands with:
+For repository-local knowledge, use:
 
 ```text
 OKF_CACHE_DIR=<repo-root>/.lore/cache <repo-root>/.lore/bin/lore <command> --bundle <repo-root>/.lore/knowledge
 ```
 
-Do not use an ordinary source root as a bundle. Keep disposable cache data outside the authoritative knowledge directory.
+Do not use an ordinary source root as a bundle. Keep the disposable cache outside the authoritative knowledge directory.
 
-## Preserve Content Neutrality
+## Command Contract
 
-- Do not assume that knowledge is software architecture, documentation, research, a decision, a task, a person, or any other domain.
-- Do not invent a taxonomy, folder hierarchy, concept type, relationship vocabulary, lifecycle status, heading template, or required body structure merely because an example used one.
-- Reuse a classification only when the bundle already uses it consistently and it accurately represents the user's intent.
-- If no suitable classification exists, use the broad type `Concept` and a descriptive root-level concept ID. Do not invent a domain hierarchy to make the bundle look organized.
-- Treat an ontology stored in the bundle as advisory user-owned knowledge. Reuse accepted terms where they fit; propose additions when they do not. Never silently expand or enforce the ontology.
-- Record source claims, user statements, and agent inferences distinctly. Do not present agent interpretation as source content.
-- Do not add `verified` metadata without evidence of who or what performed verification. Lore reports absent verification as `unverified`.
-- Do not infer a lifecycle status. An absent status is unspecified. Use `lore status` when the user or recorded workflow supplies a status.
+| Command | Use it for |
+| --- | --- |
+| `init` | Install the current executable and create repository-local Lore directories. |
+| `info` | Inspect bundle identity, versions, counts, cache state, and capabilities. |
+| `index` | Refresh derived state; use `--rebuild` to recreate it from authoritative Markdown. |
+| `find` | Search by natural lexical query with optional type, tag, status, scope, and limit filters. |
+| `get` | Retrieve one canonical concept, its hash, frontmatter, body, or an exact Markdown section. |
+| `graph` | Query relationships, backlinks, neighbourhoods, and shortest paths as structured JSON. |
+| `visualise` | Generate a disposable HTML graph when the user requests a human-readable view. |
+| `put` | Create, merge, or explicitly replace one concept from a JSON request on stdin. |
+| `status` | Change only the OKF lifecycle status with optional optimistic concurrency. |
+| `check` | Validate the bundle; use `--strict` when warnings must fail the operation. |
+| `reset` | Preview or explicitly confirm a complete recoverable or permanent knowledge reset. |
 
-These rules constrain agent-authored structure, not the user's content. Preserve terminology and organization explicitly chosen by the user even when it differs from existing conventions.
+Use `<repo-root>/.lore/bin/lore <command> --help` for the exact options and protocol supported by the installed version.
 
-## Choose the Smallest Operation
+## Query Efficiently
 
-Use the smallest useful sequence:
+Use `find` for a topic and `get` for a canonical concept ID. Use `graph` when relationships, backlinks, neighbourhoods, or paths matter. Retrieve only the authoritative concepts needed for the task instead of loading the complete bundle by default.
 
-1. Run `info` to orient a multi-step investigation or mutation.
-2. Use `find` when given a topic and `get` when given a canonical ID.
-3. Use `graph` for agent reasoning about relationships, backlinks, neighbourhoods, or paths.
-4. Use `visualise` only when the user explicitly requests a human-readable graph; do not use generated HTML as evidence or as a substitute for `graph` JSON.
-5. Use `check` for bundle health or after mutation.
-6. Use `put` for content changes and `status` for lifecycle-only changes.
+Translate compact Lore JSON into the form required by the calling workflow. Preserve concept IDs for traceability and distinguish stored content, indexed relationships, and agent inference. Mention lifecycle, trust, staleness, or broken relationships when they materially affect confidence.
 
-Do not load every concept by default. Search for relevant concepts, traverse only useful relationships, and retrieve the minimum authoritative content needed to answer.
+Use `visualise` only for a requested human-readable graph. Use `graph` JSON, not generated HTML layout, as evidence for agent reasoning.
 
-Read [references/cli.md](references/cli.md) when selecting command options, constructing mutation input, interpreting exits, or recovering from an error. Installed `--help` remains authoritative for the binary version.
+## Preserve Consumer Policy
 
-## Answer from Evidence
+Lore requires valid OKF, including a non-empty concept `type`, but this skill must not choose a type vocabulary, taxonomy, folder hierarchy, document count, body template, prose style, relationship ontology, or ingestion strategy. Apply choices supplied by the user or calling knowledge-worker workflow. Preserve unknown metadata and user-selected organization.
 
-Translate compact Lore JSON into a direct answer. Keep canonical concept IDs for traceability, and separate:
-
-- what stored content explicitly records;
-- what indexed relationships establish;
-- what the agent inferred.
-
-Mention lifecycle, trust, stale content, broken links, or missing targets when they materially affect confidence. Lore retrieves recorded knowledge; it does not prove every claim is true.
+Do not infer verification. Do not change lifecycle status unless directed by the user or an established consumer workflow. OKF lifecycle values are `draft`, `stable`, and `deprecated`; absent status is effectively `stable`.
 
 ## Mutate Safely
 
-Use `lore put` as the only content mutation primitive. Never edit concept Markdown directly.
+Use `put` as the content mutation primitive rather than editing concept Markdown directly. The request is JSON even though Lore serializes authoritative frontmatter as YAML:
 
-Before updating an existing concept, use `get` and retain its hash. Merge by default, preserve omitted body and metadata, and pass `expected_hash`. Use replacement only when the user explicitly requests complete destructive replacement. After mutation, reread the concept and run `check`.
+```json
+{
+  "mode": "merge",
+  "frontmatter": {"type": "consumer-selected-type"},
+  "body_file": "/absolute/path/to/content.md",
+  "relations": [["consumer_selected_relation", "target-concept"]],
+  "expected_hash": "hash-returned-by-get"
+}
+```
 
-Use `lore status <concept-id> <status> --expected-hash <hash>` when only lifecycle status changes. Status values are user-defined; do not select one without user direction or an established bundle workflow.
+Before updating an existing concept, call `get` and retain its hash. Merge by default, preserve omitted body and metadata, and pass `expected_hash`. Use replacement only when the user explicitly requests complete destructive replacement. A replacement request must include complete content and `allow_destructive: true`.
 
-When creating content:
+When `relations` is supplied it replaces the complete controlled `x-okf.rel` collection. Omit it to preserve existing typed relationships. Add only relationships selected or supported by the calling workflow.
 
-1. Search for an existing concept to avoid duplication.
-2. Consult relevant ontology or established bundle vocabulary if present.
-3. Preserve the user's terminology and requested structure.
-4. Use the least-assumptive type and location permitted by those inputs.
-5. Add relationships only when supported by the content or explicitly supplied by the user.
-6. Create with `put`, then retrieve and validate the result.
+Inspect `index.current` after mutation. If false, the Markdown write committed but the derived cache requires the reported recovery command. Once current, reread the concept and run `check`.
 
-On a mutation conflict, reread the current content and reconcile only when doing so preserves the user's intent. Never force a destructive write merely to make a command succeed.
+Use `status <concept-id> <draft|stable|deprecated> --expected-hash <hash>` when only lifecycle state changes. Store consumer-specific workflow states in namespaced metadata instead of overloading OKF `status`.
+
+On a conflict, reread current content and return control to the calling workflow for reconciliation. Never force a destructive write merely to make a command succeed.
+
+## Reset Safely
+
+A reset requires an explicit user request to clear the complete resolved bundle. Never infer reset permission from initialization, cache rebuilding, deletion of one concept, cleanup, or validation repair.
+
+Run `reset --knowledge --bundle <explicit-path>` without `--confirm` first. This read-only preview returns the canonical bundle, counts, byte size, mode, recoverability, and a state-derived confirmation token. Verify the target and show or use the preview as required by the caller's authorization model.
+
+Only then pass the exact token to `reset --knowledge --bundle <same-path> --confirm <token>`. Do not reuse a token across turns or retry a conflict without generating a fresh preview. A normal reset is recoverable and reports its backup path.
+
+Use `--no-backup` only when the current request explicitly authorizes a permanent, unrecoverable reset. Include it in both preview and confirmation, verify `mode: permanent` and `recoverable: false`, and report that Lore retained no backup.

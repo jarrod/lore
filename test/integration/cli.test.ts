@@ -72,7 +72,7 @@ describe("CLI protocol", () => {
     expect(global.stderr).toBe("");
     const globalData = JSON.parse(global.stdout).data;
     expect(globalData.name).toBe("lore");
-    expect(globalData.commands.map((command: { name: string }) => command.name)).toEqual(["init", "info", "index", "find", "get", "graph", "visualise", "put", "status", "check"]);
+    expect(globalData.commands.map((command: { name: string }) => command.name)).toEqual(["init", "info", "index", "find", "get", "graph", "visualise", "put", "status", "reset", "check"]);
 
     const command = await cli(["graph", "--help"]);
     expect(command.exitCode).toBe(0);
@@ -84,6 +84,14 @@ describe("CLI protocol", () => {
     const visualiseData = JSON.parse(visualise.stdout).data;
     expect(visualiseData.name).toBe("visualise");
     expect(visualiseData.options).toEqual(expect.arrayContaining([expect.objectContaining({ flag: "--open" }), expect.objectContaining({ flag: "--max-nodes" })]));
+
+    const reset = await cli(["reset", "--help"]);
+    const resetData = JSON.parse(reset.stdout).data;
+    expect(resetData.options).toEqual(expect.arrayContaining([
+      expect.objectContaining({ flag: "--knowledge" }),
+      expect.objectContaining({ flag: "--no-backup" }),
+      expect.objectContaining({ flag: "--confirm" }),
+    ]));
   });
 
   test("prints only the version", async () => {
@@ -121,6 +129,22 @@ describe("CLI protocol", () => {
     expect(strict.stderr).toBe("");
   });
 
+  test("consumes a complete OKF v0.2 bundle with provenance graph edges", async () => {
+    const okfBundle = path.join(project, "test/fixtures/okf-v0.2");
+    const checked = await cli(["check"], undefined, okfBundle);
+    expect(checked.exitCode).toBe(0);
+    expect(JSON.parse(checked.stdout).data).toEqual({ valid: true, errors: [], warnings: [] });
+
+    const graph = await cli(["graph", "computations/revenue", "--direction", "out", "--depth", "1"], undefined, okfBundle);
+    const graphData = JSON.parse(graph.stdout).data as { edges: Array<{ rel: string; origin: string }> };
+    expect(graphData.edges.filter((edge) => edge.origin === "okf").map((edge) => edge.rel).sort()).toEqual(["attester", "executor", "source"]);
+
+    const metric = await cli(["get", "metrics/revenue"], undefined, okfBundle);
+    const metricData = JSON.parse(metric.stdout).data as { effective_status: string; frontmatter: Record<string, unknown> };
+    expect(metricData.effective_status).toBe("stable");
+    expect(metricData.frontmatter.status).toBeUndefined();
+  });
+
   test("writes structured failures to stderr", async () => {
     const result = await cli(["get", "systems/missing"]);
     expect(result.exitCode).toBe(4);
@@ -150,6 +174,31 @@ describe("CLI protocol", () => {
     expect(codes).toContain("RELATIONSHIP_ESCAPES_BUNDLE");
     expect(codes).toContain("INVALID_RESERVED_FILE");
     if (caseSensitive) expect(codes).toContain("CASE_COLLIDING_CONCEPT_IDS");
+  });
+
+  test("enforces reserved-file conformance and warns on malformed optional OKF families", async () => {
+    const validationBundle = path.join(root, "validation-bundle");
+    mkdirSync(validationBundle);
+    writeFileSync(path.join(validationBundle, "index.md"), "---\nokf_version: \"0.2\"\nextra: invalid\n---\n# Knowledge\n");
+    writeFileSync(path.join(validationBundle, "log.md"), "# Log\n\n## 2026-01-01\n- Older\n\n## 2026-02-01\n- Newer\n");
+    const nested = path.join(validationBundle, "nested");
+    mkdirSync(nested);
+    writeFileSync(path.join(nested, "index.md"), "---\nokf_version: \"0.2\"\n---\n# Nested\n");
+    writeFileSync(path.join(validationBundle, "optional.md"), "---\ntype: Attested Computation\nstatus: reviewed\nstale_after: tomorrow\ntags: invalid\ngenerated:\n  at: yesterday\nverified: false\nsources:\n  - id: policy\n  - id: policy\n---\nClaim.[^missing]\n");
+
+    const checked = await cli(["check"], undefined, validationBundle);
+    expect(checked.exitCode).toBe(3);
+    const data = JSON.parse(checked.stdout).data as { errors: Array<{ code: string; reason?: string }>; warnings: Array<{ code: string }> };
+    expect(data.errors.filter((finding) => finding.code === "INVALID_RESERVED_FILE").length).toBeGreaterThanOrEqual(3);
+    expect(data.warnings.map((finding) => finding.code)).toEqual(expect.arrayContaining([
+      "ATTESTED_COMPUTATION_MISSING_RUNTIME",
+      "INVALID_GENERATED",
+      "INVALID_OKF_STATUS",
+      "INVALID_SOURCES",
+      "INVALID_STALE_AFTER",
+      "INVALID_TAGS",
+      "INVALID_VERIFIED",
+    ]));
   });
 
   test("reports malformed typed metadata as invalid OKF during queries", async () => {
@@ -219,6 +268,20 @@ describe("CLI protocol", () => {
     const fileCreated = await cli(["put", "systems/from-file"], JSON.stringify({ mode: "create", frontmatter: { type: "System" }, body_file: bodyFile }));
     expect(fileCreated.exitCode).toBe(0);
     expect(readFileSync(path.join(bundle, "systems/from-file.md"), "utf8")).toContain("# From file");
+
+    const unsafe = await cli(["put", "systems/unsafe-content"], JSON.stringify({ mode: "create", frontmatter: { type: "System", resource: "../../outside.md" }, body: "# Unsafe\n" }));
+    expect(unsafe.exitCode).toBe(3);
+    expect(existsSync(path.join(bundle, "systems/unsafe-content.md"))).toBeFalse();
+  });
+
+  test("reports a committed mutation when derived index refresh needs recovery", async () => {
+    const mutationBundle = path.join(root, "mutation-refresh-bundle");
+    mkdirSync(mutationBundle);
+    writeFileSync(path.join(mutationBundle, "invalid.md"), "---\ntype: [\n---\n");
+    const result = await cli(["put", "saved"], JSON.stringify({ mode: "create", frontmatter: { type: "Concept" }, body: "# Saved\n" }), mutationBundle);
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout).data.index).toEqual({ current: false, recovery: "lore index --rebuild" });
+    expect(readFileSync(path.join(mutationBundle, "saved.md"), "utf8")).toContain("# Saved");
   });
 
   test("changes lifecycle status deterministically without changing other content", async () => {
@@ -226,22 +289,116 @@ describe("CLI protocol", () => {
     const beforeData = JSON.parse(before.stdout).data as { hash: string; trust: string; body: string };
     expect(beforeData.trust).toBe("unverified");
 
-    const changed = await cli(["status", "systems/okta", "reviewed", "--expected-hash", beforeData.hash]);
+    const invalid = await cli(["status", "systems/okta", "reviewed", "--expected-hash", beforeData.hash]);
+    expect(invalid.exitCode).toBe(2);
+
+    const changed = await cli(["status", "systems/okta", "deprecated", "--expected-hash", beforeData.hash]);
     expect(changed.exitCode).toBe(0);
-    expect(JSON.parse(changed.stdout).data.status).toBe("reviewed");
+    expect(JSON.parse(changed.stdout).data.status).toBe("deprecated");
 
     const after = await cli(["get", "systems/okta"]);
     const afterData = JSON.parse(after.stdout).data as { frontmatter: Record<string, unknown>; body: string };
-    expect(afterData.frontmatter.status).toBe("reviewed");
+    expect(afterData.frontmatter.status).toBe("deprecated");
     expect(afterData.body).toBe(beforeData.body);
 
-    const conflict = await cli(["status", "systems/okta", "archived", "--expected-hash", beforeData.hash]);
+    const conflict = await cli(["status", "systems/okta", "stable", "--expected-hash", beforeData.hash]);
     expect(conflict.exitCode).toBe(5);
     expect(JSON.parse(conflict.stderr).error.code).toBe("MUTATION_CONFLICT");
 
-    const missing = await cli(["status", "systems/missing-status", "reviewed"]);
+    const missing = await cli(["status", "systems/missing-status", "stable"]);
     expect(missing.exitCode).toBe(4);
     expect(JSON.parse(missing.stderr).error.code).toBe("CONCEPT_NOT_FOUND");
+  });
+
+  test("previews and performs a recoverable knowledge reset", async () => {
+    const resetRepository = path.join(root, "reset-repository");
+    mkdirSync(path.join(resetRepository, ".lore"), { recursive: true });
+    const resetBundle = path.join(resetRepository, ".lore", "knowledge");
+    cpSync(path.join(project, "test/fixtures/graph"), resetBundle, { recursive: true });
+
+    const implicitBundle = await compiledCli(["reset", "--knowledge"]);
+    expect(implicitBundle.exitCode).toBe(2);
+    expect(JSON.parse(implicitBundle.stderr).error.code).toBe("INVALID_ARGUMENT");
+
+    const missingScope = await cli(["reset"], undefined, resetBundle);
+    expect(missingScope.exitCode).toBe(2);
+
+    const preview = await cli(["reset", "--knowledge"], undefined, resetBundle);
+    expect(preview.exitCode).toBe(0);
+    const previewData = JSON.parse(preview.stdout).data as {
+      bundle: string;
+      concepts: number;
+      files: number;
+      confirmation_token: string;
+      requires_confirmation: boolean;
+    };
+    expect(previewData).toEqual(expect.objectContaining({
+      bundle: realpathSync(resetBundle),
+      concepts: 7,
+      files: 8,
+      requires_confirmation: true,
+    }));
+    expect(previewData.confirmation_token).toMatch(/^[a-f0-9]{64}$/);
+    expect(existsSync(path.join(resetBundle, "systems/okta.md"))).toBeTrue();
+
+    const wrong = await cli(["reset", "--knowledge", "--confirm", "wrong"], undefined, resetBundle);
+    expect(wrong.exitCode).toBe(5);
+    expect(JSON.parse(wrong.stderr).error.code).toBe("MUTATION_CONFLICT");
+    expect(existsSync(path.join(resetBundle, "systems/okta.md"))).toBeTrue();
+
+    writeFileSync(path.join(resetBundle, "changed.txt"), "changed");
+    const stale = await cli(["reset", "--knowledge", "--confirm", previewData.confirmation_token], undefined, resetBundle);
+    expect(stale.exitCode).toBe(5);
+    expect(existsSync(path.join(resetBundle, "systems/okta.md"))).toBeTrue();
+
+    const refreshed = await cli(["reset", "--knowledge"], undefined, resetBundle);
+    const token = JSON.parse(refreshed.stdout).data.confirmation_token as string;
+    const reset = await cli(["reset", "--knowledge", "--confirm", token], undefined, resetBundle);
+    expect(reset.exitCode).toBe(0);
+    const resetData = JSON.parse(reset.stdout).data as { backup: string; concepts: number; removed: { concepts: number; files: number }; cache: { current: boolean } };
+    expect(resetData).toEqual(expect.objectContaining({ concepts: 0, cache: { current: true } }));
+    expect(resetData.removed).toEqual(expect.objectContaining({ concepts: 7, files: 9 }));
+    expect(readdirSync(resetBundle)).toEqual([]);
+    expect(path.dirname(resetData.backup)).toBe(realpathSync(path.join(resetRepository, ".lore", "backups")));
+    expect(existsSync(path.join(resetData.backup, "systems/okta.md"))).toBeTrue();
+
+    const info = await cli(["info"], undefined, resetBundle);
+    expect(JSON.parse(info.stdout).data).toEqual(expect.objectContaining({ concepts: 0, edges: 0 }));
+  });
+
+  test("permanently resets knowledge only with a mode-specific token", async () => {
+    const resetRepository = path.join(root, "permanent-reset-repository");
+    mkdirSync(path.join(resetRepository, ".lore"), { recursive: true });
+    const resetBundle = path.join(resetRepository, ".lore", "knowledge");
+    cpSync(path.join(project, "test/fixtures/graph"), resetBundle, { recursive: true });
+
+    const indexed = await cli(["info"], undefined, resetBundle);
+    expect(JSON.parse(indexed.stdout).data).toEqual(expect.objectContaining({ concepts: 7 }));
+
+    const recoverablePreview = await cli(["reset", "--knowledge"], undefined, resetBundle);
+    const recoverableToken = JSON.parse(recoverablePreview.stdout).data.confirmation_token as string;
+    const permanentPreview = await cli(["reset", "--knowledge", "--no-backup"], undefined, resetBundle);
+    const permanentData = JSON.parse(permanentPreview.stdout).data as { confirmation_token: string; mode: string; recoverable: boolean };
+    expect(permanentData).toEqual(expect.objectContaining({ mode: "permanent", recoverable: false }));
+    expect(permanentData.confirmation_token).not.toBe(recoverableToken);
+
+    const wrongMode = await cli(["reset", "--knowledge", "--no-backup", "--confirm", recoverableToken], undefined, resetBundle);
+    expect(wrongMode.exitCode).toBe(5);
+    expect(existsSync(path.join(resetBundle, "systems/okta.md"))).toBeTrue();
+
+    const reset = await cli(["reset", "--knowledge", "--no-backup", "--confirm", permanentData.confirmation_token], undefined, resetBundle);
+    expect(reset.exitCode).toBe(0);
+    const resetData = JSON.parse(reset.stdout).data as Record<string, unknown>;
+    expect(resetData).toEqual(expect.objectContaining({ mode: "permanent", recoverable: false, concepts: 0, cache: { current: true } }));
+    expect(resetData.backup).toBeUndefined();
+    expect(readdirSync(resetBundle)).toEqual([]);
+    expect(existsSync(path.join(resetRepository, ".lore", "backups"))).toBeFalse();
+    expect(readdirSync(path.join(resetRepository, ".lore"))).toEqual(["knowledge"]);
+
+    const info = await cli(["info"], undefined, resetBundle);
+    expect(JSON.parse(info.stdout).data).toEqual(expect.objectContaining({ concepts: 0, edges: 0 }));
+    const find = await cli(["find", "identity"], undefined, resetBundle);
+    expect(JSON.parse(find.stdout).data.results).toEqual([]);
   });
 
   test("generates complete and rooted visualisations as disposable HTML", async () => {

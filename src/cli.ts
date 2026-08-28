@@ -10,6 +10,7 @@ import { runInit } from "./commands/init";
 import { requireCompiledExecutable } from "./runtime";
 import { TOOL_VERSION } from "./version";
 import { runVisualise } from "./commands/visualise";
+import { runReset } from "./mutation/reset";
 
 async function main(): Promise<never> {
   requireCompiledExecutable();
@@ -27,6 +28,7 @@ async function main(): Promise<never> {
     if (parsed.bundle) throw invalidArgument("--bundle is not valid for init");
     return writeSuccess(runInit(parsed.args));
   }
+  if (command === "reset" && !parsed.bundle) throw invalidArgument("reset requires an explicit --bundle path");
   const bundle = resolveBundle(parsed.bundle);
   switch (command) {
     case "info": return writeSuccess(await runInfo(bundle, parsed.args));
@@ -37,6 +39,7 @@ async function main(): Promise<never> {
     case "visualise": return writeSuccess(await runVisualise(bundle, parsed.args));
     case "put": return writeSuccess(await runPut(bundle, parsed.args));
     case "status": return writeSuccess(await runStatus(bundle, parsed.args));
+    case "reset": return writeSuccess(await runReset(bundle, parsed.args));
     case "check": {
       const result = await runCheck(bundle, parsed.args);
       return writeSuccess(result.data, result.exitCode);

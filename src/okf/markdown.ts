@@ -5,7 +5,7 @@ import type { Frontmatter } from "./frontmatter";
 export interface EdgeInput {
   rel: string;
   dst: string;
-  origin: "markdown" | "typed";
+  origin: "markdown" | "typed" | "okf";
 }
 
 export function extractMarkdownEdges(body: string, sourceId: string): EdgeInput[] {
@@ -13,20 +13,8 @@ export function extractMarkdownEdges(body: string, sourceId: string): EdgeInput[
   const sourceDir = path.posix.dirname(sourceId);
   const edges: EdgeInput[] = [];
   for (const raw of hrefs) {
-    const href = raw.split("#", 1)[0]?.split("?", 1)[0] ?? "";
-    if (!href.endsWith(".md") || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) continue;
-    const basename = path.posix.basename(href);
-    if (basename === "index.md" || basename === "log.md") continue;
-    const resolved = href.startsWith("/")
-      ? path.posix.normalize(href.slice(1))
-      : path.posix.normalize(path.posix.join(sourceDir === "." ? "" : sourceDir, href));
-    if (resolved.startsWith("../") || resolved === "..") continue;
-    const id = resolved.slice(0, -3);
-    try {
-      edges.push({ rel: "links_to", dst: validateConceptId(id), origin: "markdown" });
-    } catch {
-      // Unsafe Markdown targets are validation concerns, not graph nodes.
-    }
+    const target = resolveConceptTarget(raw, sourceDir);
+    if (target?.id) edges.push({ rel: "links_to", dst: target.id, origin: "markdown" });
   }
   return dedupeEdges(edges);
 }
@@ -34,13 +22,65 @@ export function extractMarkdownEdges(body: string, sourceId: string): EdgeInput[
 export function unsafeMarkdownTargets(body: string, sourceId: string): string[] {
   const sourceDir = path.posix.dirname(sourceId);
   return markdownHrefs(body).filter((raw) => {
-    const href = raw.split("#", 1)[0]?.split("?", 1)[0] ?? "";
-    if (!href.endsWith(".md") || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return false;
-    const resolved = href.startsWith("/")
-      ? path.posix.normalize(href.slice(1))
-      : path.posix.normalize(path.posix.join(sourceDir === "." ? "" : sourceDir, href));
-    return resolved === ".." || resolved.startsWith("../");
+    return resolveConceptTarget(raw, sourceDir)?.unsafe === true;
   });
+}
+
+export function extractOkfEdges(frontmatter: Frontmatter, sourceId: string): EdgeInput[] {
+  const sourceDir = path.posix.dirname(sourceId);
+  const edges: EdgeInput[] = [];
+  for (const field of okfPathFields(frontmatter)) {
+    const target = resolveConceptTarget(field.value, sourceDir);
+    if (target?.id) edges.push({ rel: field.rel, dst: target.id, origin: "okf" });
+  }
+  return dedupeEdges(edges);
+}
+
+export function unsafeOkfTargets(frontmatter: Frontmatter, sourceId: string): string[] {
+  const sourceDir = path.posix.dirname(sourceId);
+  return okfPathFields(frontmatter)
+    .filter((field) => resolveConceptTarget(field.value, sourceDir)?.unsafe)
+    .map((field) => field.value);
+}
+
+function okfPathFields(frontmatter: Frontmatter): Array<{ rel: string; value: string }> {
+  const fields: Array<{ rel: string; value: string }> = [];
+  addStringField(fields, "resource", frontmatter.resource);
+  addStringField(fields, "computation", frontmatter.computation);
+  for (const relation of ["executor", "attester"] as const) {
+    const value = frontmatter[relation];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      addStringField(fields, relation, (value as Record<string, unknown>).resource);
+    }
+  }
+  if (Array.isArray(frontmatter.sources)) {
+    for (const source of frontmatter.sources) {
+      if (source && typeof source === "object" && !Array.isArray(source)) {
+        addStringField(fields, "source", (source as Record<string, unknown>).resource);
+      }
+    }
+  }
+  return fields;
+}
+
+function addStringField(fields: Array<{ rel: string; value: string }>, rel: string, value: unknown): void {
+  if (typeof value === "string") fields.push({ rel, value });
+}
+
+function resolveConceptTarget(raw: string, sourceDir: string): { id?: string; unsafe?: true } | undefined {
+  const href = raw.split("#", 1)[0]?.split("?", 1)[0] ?? "";
+  if (!href.endsWith(".md") || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return undefined;
+  const basename = path.posix.basename(href);
+  if (basename === "index.md" || basename === "log.md") return undefined;
+  const resolved = href.startsWith("/")
+    ? path.posix.normalize(href.slice(1))
+    : path.posix.normalize(path.posix.join(sourceDir === "." ? "" : sourceDir, href));
+  if (resolved.startsWith("../") || resolved === "..") return { unsafe: true };
+  try {
+    return { id: validateConceptId(resolved.slice(0, -3)) };
+  } catch {
+    return { unsafe: true };
+  }
 }
 
 function markdownHrefs(body: string): string[] {

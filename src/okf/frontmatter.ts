@@ -1,6 +1,8 @@
 import { invalidOkf } from "../protocol/errors";
 
 export type Frontmatter = Record<string, unknown>;
+export const OKF_STATUSES = ["draft", "stable", "deprecated"] as const;
+export type OkfStatus = typeof OKF_STATUSES[number];
 
 export interface ParsedDocument {
   frontmatter: Frontmatter;
@@ -101,8 +103,8 @@ function isSafePlainString(value: string): boolean {
   }
 }
 
-export function effectiveStatus(frontmatter: Frontmatter): string | null {
-  return typeof frontmatter.status === "string" ? frontmatter.status : null;
+export function effectiveStatus(frontmatter: Frontmatter): string {
+  return typeof frontmatter.status === "string" ? frontmatter.status : "stable";
 }
 
 export function trustTier(frontmatter: Frontmatter): "unverified" | "machine_confirmed" | "human_reviewed" {
@@ -118,5 +120,15 @@ export function trustTier(frontmatter: Frontmatter): "unverified" | "machine_con
 }
 
 export function isStale(frontmatter: Frontmatter, today = new Date().toISOString().slice(0, 10)): boolean {
-  return typeof frontmatter.stale_after === "string" && today >= frontmatter.stale_after;
+  return typeof frontmatter.stale_after === "string" && isOkfDate(frontmatter.stale_after) && today >= frontmatter.stale_after;
+}
+
+export function isOkfDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+}
+
+export function isOkfStatus(value: string): value is OkfStatus {
+  return (OKF_STATUSES as readonly string[]).includes(value);
 }
