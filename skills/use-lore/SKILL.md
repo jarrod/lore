@@ -10,18 +10,20 @@ Use Lore as a deterministic interface to an OKF knowledge bundle. Lore owns stor
 ## Locate Lore
 
 1. Determine the repository root being worked on.
-2. Use `<repo-root>/.lore/bin/lore` as the executable on macOS.
+2. Use `<repo-root>/.lore/bin/lore.exe` on Windows and `<repo-root>/.lore/bin/lore` on macOS or Linux. Refer to the selected path as `<lore-executable>` below.
 3. If it is absent, stop and tell the user to obtain a trusted standalone executable and run `<downloaded-lore> init --repo <repo-root>`.
-4. Run `<repo-root>/.lore/bin/lore --help` before first use. Installed help is authoritative for the binary version.
+4. Run `<lore-executable> --help` before first use. Installed help is authoritative for the binary version.
 
 ## Select the Bundle
 
 Use a bundle explicitly supplied by the user. Otherwise use `<repo-root>/.lore/knowledge`. If repository setup is authorized and that directory is absent, initialize the repository with the standalone executable.
 
-For repository-local knowledge, use:
+For repository-local knowledge, set `OKF_CACHE_DIR` to `<repo-root>/.lore/cache` in the command environment, then run:
+
 ```text
-OKF_CACHE_DIR=<repo-root>/.lore/cache <repo-root>/.lore/bin/lore <command> --bundle <repo-root>/.lore/knowledge
+<lore-executable> <command> --bundle <repo-root>/.lore/knowledge
 ```
+
 Do not use an ordinary source root as a bundle. Keep the disposable cache outside the authoritative knowledge directory.
 
 ## Command Contract
@@ -40,11 +42,13 @@ Do not use an ordinary source root as a bundle. Keep the disposable cache outsid
 | `check` | Validate the bundle; use `--strict` when warnings must fail the operation. |
 | `reset` | Preview or explicitly confirm a complete recoverable or permanent knowledge reset. |
 
-Use `<repo-root>/.lore/bin/lore <command> --help` for the exact options and protocol supported by the installed version.
+Use `<lore-executable> <command> --help` for the exact options and protocol supported by the installed version.
 
 ## Query Efficiently
 
 Use `find` for a topic and `get` for a canonical concept ID. Use `graph` when relationships, backlinks, neighbourhoods, or paths matter. Retrieve only the authoritative concepts needed for the task instead of loading the complete bundle by default.
+
+`find` searches concept IDs and visible semantic Markdown, including code and image descriptions. Query knowledge terms rather than link destinations, image paths, or formatting syntax, which are not indexed.
 
 Translate compact Lore JSON into the form required by the calling workflow. Preserve concept IDs for traceability and distinguish stored content, indexed relationships, and agent inference. Mention lifecycle, trust, staleness, or broken relationships when they materially affect confidence.
 
@@ -59,6 +63,7 @@ Do not infer verification. Do not change lifecycle status unless directed by the
 ## Mutate Safely
 
 Use `put` as the content mutation primitive rather than editing concept Markdown directly.
+
 ```json
 {
   "mode": "merge",
@@ -68,6 +73,7 @@ Use `put` as the content mutation primitive rather than editing concept Markdown
   "expected_hash": "hash-returned-by-get"
 }
 ```
+
 Before updating an existing concept, call `get` and retain its hash. Merge by default, preserve omitted body and metadata, and pass `expected_hash`. Use replacement only when the user explicitly requests complete destructive replacement. A replacement request must include complete content and `allow_destructive: true`.
 
 When `relations` is supplied it replaces the complete controlled `x-okf.rel` collection. Omit it to preserve existing typed relationships. Add only relationships selected or supported by the calling workflow.

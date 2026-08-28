@@ -258,7 +258,7 @@ Install the whole `skills/use-lore` directory into the target agent's skill sear
 cp -R skills/use-lore /path/to/agent/skills/use-lore
 ```
 
-The skill and executable are separate deliverables. The skill uses only the repository-local `.lore/bin/lore` executable. It never invokes the TypeScript source, Bun, Node.js, npm, package scripts, a compiler, `LORE_BIN`, or a globally installed executable.
+The skill and executable are separate deliverables. The skill uses only the repository-local executable installed by `init`: `.lore/bin/lore` on macOS or Linux and `.lore/bin/lore.exe` on Windows. It never invokes the TypeScript source, Bun, Node.js, npm, package scripts, a compiler, `LORE_BIN`, or a globally installed executable.
 
 ### Repository-local setup
 
@@ -272,7 +272,7 @@ Initialization creates:
 
 ```text
 <repository>/.lore/
-├── bin/lore          # repository-local compiled executable
+├── bin/lore          # repository-local executable; lore.exe on Windows
 ├── cache/            # disposable SQLite state
 ├── knowledge/        # authoritative, portable OKF Markdown; initially empty
 ├── backups/          # recoverable pre-reset bundles, created on demand
@@ -280,12 +280,10 @@ Initialization creates:
 └── .gitignore        # ignores bin/, cache/, backups/, and visualisations/
 ```
 
-The agent invokes the repository-local binary with:
+The agent selects the platform-specific repository-local executable, sets `OKF_CACHE_DIR` to `<repository>/.lore/cache` in the command environment, and invokes it with an explicit bundle:
 
-```bash
-OKF_CACHE_DIR=/path/to/repository/.lore/cache \
-  /path/to/repository/.lore/bin/lore info \
-  --bundle /path/to/repository/.lore/knowledge
+```text
+<lore-executable> info --bundle <repository>/.lore/knowledge
 ```
 
 The project-local `.lore/knowledge` convention removes the need to set `OKF_BUNDLE`. Keep `OKF_BUNDLE` only when intentionally pointing Lore at an external or shared bundle.
@@ -296,7 +294,7 @@ Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before openin
 
 ## Releases
 
-Pull requests and pushes to `main` run the test, type-check, native-build, and compiled smoke-test workflow. They do not publish releases.
+Pull requests and pushes to `main` run the dependency audit, tests, type checking, native build, and compiled smoke-test workflow. They do not publish releases.
 
 To publish the version declared in `package.json`, create and push the matching tag from a commit contained in `main`:
 
