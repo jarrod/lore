@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,29 +26,26 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 async function cli(args: string[], stdin?: string, targetBundle = bundle): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawnSync([binary, ...args, "--bundle", targetBundle], {
+  const process = spawnSync(binary, [...args, "--bundle", targetBundle], {
     cwd: project,
     env: { ...Bun.env, OKF_CACHE_DIR: cache },
-    stdin: stdin === undefined ? "ignore" : Buffer.from(stdin),
-    stdout: "pipe",
-    stderr: "pipe",
+    input: stdin,
+    encoding: "utf8",
   });
-  return { exitCode: process.exitCode, stdout: process.stdout.toString(), stderr: process.stderr.toString() };
+  return { exitCode: process.status ?? 10, stdout: process.stdout, stderr: process.stderr };
 }
 
 async function sourceCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawnSync(["bun", path.join(project, "src/cli.ts"), ...args], {
+  const process = spawnSync("bun", [path.join(project, "src/cli.ts"), ...args], {
     cwd: project,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
+    encoding: "utf8",
   });
-  return { exitCode: process.exitCode, stdout: process.stdout.toString(), stderr: process.stderr.toString() };
+  return { exitCode: process.status ?? 10, stdout: process.stdout, stderr: process.stderr };
 }
 
 async function compiledCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawnSync([binary, ...args], { cwd: project, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-  return { exitCode: process.exitCode, stdout: process.stdout.toString(), stderr: process.stderr.toString() };
+  const process = spawnSync(binary, args, { cwd: project, encoding: "utf8" });
+  return { exitCode: process.status ?? 10, stdout: process.stdout, stderr: process.stderr };
 }
 
 describe("CLI protocol", () => {

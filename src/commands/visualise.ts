@@ -1,5 +1,5 @@
-import { existsSync, statSync } from "node:fs";
-import { mkdir, realpath, rename, unlink } from "node:fs/promises";
+import { existsSync, realpathSync, statSync } from "node:fs";
+import { mkdir, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 import { openDatabase } from "../index/database";
 import { bundleGraph, graphTraversal, type Direction } from "../index/graph";
@@ -88,7 +88,9 @@ async function prepareOutput(bundle: string, requested: string): Promise<string>
     if (next === existingAncestor) throw invalidArgument("Visualisation output has no accessible parent", { path: requested });
     existingAncestor = next;
   }
-  const resolvedParent = path.join(await realpath(existingAncestor), ...missingSegments);
+  // Use the same synchronous canonicalizer as bundle resolution so Windows
+  // short and long path aliases cannot bypass the bundle boundary check.
+  const resolvedParent = path.join(realpathSync(existingAncestor), ...missingSegments);
   const output = path.join(resolvedParent, path.basename(requested));
   assertOutsideBundle(bundle, output);
   await mkdir(resolvedParent, { recursive: true });
