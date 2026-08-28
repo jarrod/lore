@@ -409,7 +409,8 @@ describe("CLI protocol", () => {
     expect(complete.exitCode).toBe(0);
     expect(complete.stderr).toBe("");
     const completeData = JSON.parse(complete.stdout).data as { path: string; scope: string; root: null; nodes: number; edges: number; opened: boolean };
-    expect(completeData).toEqual(expect.objectContaining({ path: realpathSync(completePath), scope: "bundle", root: null, nodes: 9, edges: 9, opened: false }));
+    expect(realpathSync(completeData.path)).toBe(realpathSync(completePath));
+    expect(completeData).toEqual(expect.objectContaining({ scope: "bundle", root: null, nodes: 9, edges: 9, opened: false }));
     const html = readFileSync(completePath, "utf8");
     expect(html).toContain("Lore knowledge graph");
     expect(html).toContain("systems/missing");

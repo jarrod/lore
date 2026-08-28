@@ -1,3 +1,4 @@
+import { writeSync } from "node:fs";
 import { resolveBundle, takeGlobalBundleOption } from "./okf/bundle";
 import { writeFailure, writeSuccess } from "./protocol/result";
 import { invalidArgument } from "./protocol/errors";
@@ -16,7 +17,7 @@ async function main(): Promise<never> {
   requireCompiledExecutable();
   const rawArgs = Bun.argv.slice(2);
   if (rawArgs.length === 1 && rawArgs[0] === "--version") {
-    process.stdout.write(`${TOOL_VERSION}\n`);
+    writeSync(process.stdout.fd, `${TOOL_VERSION}\n`);
     process.exit(0);
   }
   const parsed = takeGlobalBundleOption(rawArgs);
