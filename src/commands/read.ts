@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { readFile, realpath } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { type Database } from "bun:sqlite";
 import { openDatabase, verifyFts5 } from "../index/database";
@@ -73,7 +74,7 @@ export async function runGet(bundle: string, args: string[]): Promise<unknown> {
   const filePath = conceptPath(bundle, id);
   if (!existsSync(filePath)) throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id });
   let resolvedPath: string;
-  try { resolvedPath = await realpath(filePath); }
+  try { resolvedPath = realpathSync(filePath); }
   catch { throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id }); }
   assertBundlePath(bundle, resolvedPath, id);
   const content = await readFile(resolvedPath, "utf8");

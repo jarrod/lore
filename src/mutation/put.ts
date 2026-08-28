@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, realpath, rename, unlink } from "node:fs/promises";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { mkdir, readFile, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 import { openDatabase } from "../index/database";
 import { refreshIndex } from "../index/refresh";
@@ -47,7 +47,7 @@ export async function putConcept(bundle: string, id: string, request: PutRequest
   if (mode === "replace" && request.allow_destructive !== true) throw conflict("replace requires allow_destructive=true", { id });
   let current: { frontmatter: Frontmatter; body: string; hash: string } | undefined;
   if (exists) {
-    const resolvedDestination = await realpath(destination);
+    const resolvedDestination = realpathSync(destination);
     assertBundlePath(bundle, resolvedDestination, id);
     const content = await readFile(resolvedDestination, "utf8");
     const parsed = splitDocument(content, id);
@@ -110,9 +110,9 @@ async function ensureContainedParent(bundle: string, destination: string, id: st
     if (next === existingAncestor) throw invalidArgument("Concept path has no accessible bundle ancestor", { id });
     existingAncestor = next;
   }
-  assertBundlePath(bundle, await realpath(existingAncestor), id);
+  assertBundlePath(bundle, realpathSync(existingAncestor), id);
   await mkdir(parent, { recursive: true });
-  assertBundlePath(bundle, await realpath(parent), id);
+  assertBundlePath(bundle, realpathSync(parent), id);
 }
 
 async function readBodyFile(file: string): Promise<string> {
