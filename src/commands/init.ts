@@ -52,7 +52,7 @@ function resolveRepository(input?: string): string {
 
 function installSelf(destination: string): boolean {
   const source = realpathSync(process.execPath);
-  if (existsSync(destination) && realpathSync(destination) === source) return false;
+  if (existsSync(destination) && sameFile(source, destination)) return false;
 
   const temporary = `${destination}.tmp-${process.pid}`;
   try {
@@ -63,6 +63,17 @@ function installSelf(destination: string): boolean {
   } finally {
     rmSync(temporary, { force: true });
   }
+}
+
+function sameFile(source: string, destination: string): boolean {
+  const sourceStat = statSync(source);
+  const destinationStat = statSync(destination);
+  if (sourceStat.ino !== 0 && sourceStat.dev === destinationStat.dev && sourceStat.ino === destinationStat.ino) return true;
+  const sourcePath = realpathSync(source);
+  const destinationPath = realpathSync(destination);
+  return process.platform === "win32"
+    ? sourcePath.toLowerCase() === destinationPath.toLowerCase()
+    : sourcePath === destinationPath;
 }
 
 function replaceFile(source: string, destination: string): void {
