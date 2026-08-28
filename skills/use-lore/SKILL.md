@@ -14,18 +14,14 @@ Use Lore as a deterministic interface to an OKF knowledge bundle. Lore owns stor
 3. If it is absent, stop and tell the user to obtain a trusted standalone executable and run `<downloaded-lore> init --repo <repo-root>`.
 4. Run `<repo-root>/.lore/bin/lore --help` before first use. Installed help is authoritative for the binary version.
 
-Never invoke Lore's TypeScript source, Bun, Node.js, npm, a package script, compiler, `LORE_BIN`, or an executable from `PATH`. Installing this skill does not install Lore.
-
 ## Select the Bundle
 
 Use a bundle explicitly supplied by the user. Otherwise use `<repo-root>/.lore/knowledge`. If repository setup is authorized and that directory is absent, initialize the repository with the standalone executable.
 
 For repository-local knowledge, use:
-
 ```text
 OKF_CACHE_DIR=<repo-root>/.lore/cache <repo-root>/.lore/bin/lore <command> --bundle <repo-root>/.lore/knowledge
 ```
-
 Do not use an ordinary source root as a bundle. Keep the disposable cache outside the authoritative knowledge directory.
 
 ## Command Contract
@@ -62,8 +58,7 @@ Do not infer verification. Do not change lifecycle status unless directed by the
 
 ## Mutate Safely
 
-Use `put` as the content mutation primitive rather than editing concept Markdown directly. The request is JSON even though Lore serializes authoritative frontmatter as YAML:
-
+Use `put` as the content mutation primitive rather than editing concept Markdown directly.
 ```json
 {
   "mode": "merge",
@@ -73,7 +68,6 @@ Use `put` as the content mutation primitive rather than editing concept Markdown
   "expected_hash": "hash-returned-by-get"
 }
 ```
-
 Before updating an existing concept, call `get` and retain its hash. Merge by default, preserve omitted body and metadata, and pass `expected_hash`. Use replacement only when the user explicitly requests complete destructive replacement. A replacement request must include complete content and `allow_destructive: true`.
 
 When `relations` is supplied it replaces the complete controlled `x-okf.rel` collection. Omit it to preserve existing typed relationships. Add only relationships selected or supported by the calling workflow.
