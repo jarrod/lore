@@ -23,7 +23,15 @@ jobs:
           bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun test
+      - name: Run full test suite
+        if: runner.os != 'Windows'
+        run: bun test
+      # Bun 1.4 on Windows can lose subprocess output inside `bun test`.
+      # Keep deterministic tests in the runner and exercise the compiled CLI,
+      # including stdin mutation, in the standalone smoke step below.
+      - name: Run Windows tests without subprocess integration harness
+        if: runner.os == 'Windows'
+        run: bun test ./test/unit/okf.test.ts ./test/integration/index.test.ts
       - run: bun run build
       - run: bun test/smoke.ts
 

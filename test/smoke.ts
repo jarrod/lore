@@ -48,6 +48,8 @@ try {
   if (!initData.data.bundle || !existsSync(initData.data.bundle)) throw new Error("init did not create the knowledge bundle");
   if (readdirSync(initData.data.bundle).length !== 0) throw new Error("init did not create an empty knowledge bundle");
   if (!initData.data.cache || !existsSync(initData.data.cache)) throw new Error("init did not create the cache directory");
+  const localBundle = initData.data.bundle;
+  const localCache = initData.data.cache;
   const ignore = path.join(initializedRepository, ".lore", ".gitignore");
   writeFileSync(ignore, `${readFileSync(ignore, "utf8")}custom-entry\n`);
 
@@ -61,6 +63,32 @@ try {
   if (!readFileSync(ignore, "utf8").includes("custom-entry")) throw new Error("init did not preserve existing ignore entries");
   if (!readFileSync(ignore, "utf8").includes("/visualisations/")) throw new Error("init did not ignore generated visualisations");
   if (!readFileSync(ignore, "utf8").includes("/backups/")) throw new Error("init did not ignore recoverable knowledge backups");
+
+  const created = Bun.spawnSync([localBinary, "put", "smoke/example", "--bundle", localBundle], {
+    env: { ...Bun.env, OKF_CACHE_DIR: localCache },
+    stdin: Buffer.from(JSON.stringify({
+      mode: "create",
+      frontmatter: { type: "Smoke Test", title: "Compiled mutation" },
+      body: "# Compiled mutation\n",
+    })),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (created.exitCode !== 0) throw new Error(`put failed: ${created.stderr.toString()}`);
+  const createdData = JSON.parse(created.stdout.toString()) as { ok?: boolean; data?: { hash?: string } };
+  if (createdData.ok !== true || !createdData.data?.hash) throw new Error("put did not return a mutation hash");
+
+  const changed = Bun.spawnSync([
+    localBinary, "status", "smoke/example", "deprecated", "--expected-hash", createdData.data.hash,
+    "--bundle", localBundle,
+  ], {
+    env: { ...Bun.env, OKF_CACHE_DIR: localCache },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (changed.exitCode !== 0) throw new Error(`status failed: ${changed.stderr.toString()}`);
+  const changedData = JSON.parse(changed.stdout.toString()) as { ok?: boolean; data?: { status?: string } };
+  if (changedData.ok !== true || changedData.data?.status !== "deprecated") throw new Error("status did not update the compiled mutation");
 
   for (const args of commands) {
     const child = Bun.spawnSync([binary, ...args, "--bundle", bundle], {
