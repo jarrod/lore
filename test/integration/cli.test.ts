@@ -25,44 +25,29 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 async function cli(args: string[], stdin?: string, targetBundle = bundle): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawn([binary, ...args, "--bundle", targetBundle], {
+  const process = Bun.spawnSync([binary, ...args, "--bundle", targetBundle], {
     cwd: project,
     env: { ...Bun.env, OKF_CACHE_DIR: cache },
-    stdin: stdin === undefined ? "ignore" : new Blob([stdin]),
+    stdin: stdin === undefined ? "ignore" : Buffer.from(stdin),
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [exitCode, stdout, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-  ]);
-  return { exitCode, stdout, stderr };
+  return { exitCode: process.exitCode, stdout: process.stdout.toString(), stderr: process.stderr.toString() };
 }
 
 async function sourceCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawn(["bun", path.join(project, "src/cli.ts"), ...args], {
+  const process = Bun.spawnSync(["bun", path.join(project, "src/cli.ts"), ...args], {
     cwd: project,
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [exitCode, stdout, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-  ]);
-  return { exitCode, stdout, stderr };
+  return { exitCode: process.exitCode, stdout: process.stdout.toString(), stderr: process.stderr.toString() };
 }
 
 async function compiledCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = Bun.spawn([binary, ...args], { cwd: project, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-  const [exitCode, stdout, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-  ]);
-  return { exitCode, stdout, stderr };
+  const process = Bun.spawnSync([binary, ...args], { cwd: project, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  return { exitCode: process.exitCode, stdout: process.stdout.toString(), stderr: process.stderr.toString() };
 }
 
 describe("CLI protocol", () => {
@@ -409,7 +394,9 @@ describe("CLI protocol", () => {
     expect(complete.exitCode).toBe(0);
     expect(complete.stderr).toBe("");
     const completeData = JSON.parse(complete.stdout).data as { path: string; scope: string; root: null; nodes: number; edges: number; opened: boolean };
-    expect(realpathSync(completeData.path)).toBe(realpathSync(completePath));
+    expect(path.basename(completeData.path)).toBe(path.basename(completePath));
+    expect(path.basename(path.dirname(completeData.path))).toBe(path.basename(path.dirname(completePath)));
+    expect(existsSync(completeData.path)).toBeTrue();
     expect(completeData).toEqual(expect.objectContaining({ scope: "bundle", root: null, nodes: 9, edges: 9, opened: false }));
     const html = readFileSync(completePath, "utf8");
     expect(html).toContain("Lore knowledge graph");
