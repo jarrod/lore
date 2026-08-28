@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -26,26 +26,45 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 async function cli(args: string[], stdin?: string, targetBundle = bundle): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = spawnSync(binary, [...args, "--bundle", targetBundle], {
-    cwd: project,
-    env: { ...Bun.env, OKF_CACHE_DIR: cache },
-    input: stdin,
-    encoding: "utf8",
-  });
-  return { exitCode: process.status ?? 10, stdout: process.stdout, stderr: process.stderr };
+  return runProcess(binary, [...args, "--bundle", targetBundle], stdin, { ...Bun.env, OKF_CACHE_DIR: cache });
 }
 
 async function sourceCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = spawnSync("bun", [path.join(project, "src/cli.ts"), ...args], {
-    cwd: project,
-    encoding: "utf8",
-  });
-  return { exitCode: process.status ?? 10, stdout: process.stdout, stderr: process.stderr };
+  return runProcess("bun", [path.join(project, "src/cli.ts"), ...args]);
 }
 
 async function compiledCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const process = spawnSync(binary, args, { cwd: project, encoding: "utf8" });
-  return { exitCode: process.status ?? 10, stdout: process.stdout, stderr: process.stderr };
+  return runProcess(binary, args);
+}
+
+function runProcess(command: string, args: string[], stdin?: string, env = Bun.env): { exitCode: number; stdout: string; stderr: string } {
+  const token = crypto.randomUUID();
+  const stdinPath = path.join(root, `${token}.stdin`);
+  const stdoutPath = path.join(root, `${token}.stdout`);
+  const stderrPath = path.join(root, `${token}.stderr`);
+  if (stdin !== undefined) writeFileSync(stdinPath, stdin);
+  const stdinFd = stdin === undefined ? undefined : openSync(stdinPath, "r");
+  const stdoutFd = openSync(stdoutPath, "w");
+  const stderrFd = openSync(stderrPath, "w");
+  let exitCode = 10;
+  try {
+    const process = spawnSync(command, args, {
+      cwd: project,
+      env,
+      stdio: [stdinFd ?? "ignore", stdoutFd, stderrFd],
+    });
+    exitCode = process.status ?? 10;
+  } finally {
+    if (stdinFd !== undefined) closeSync(stdinFd);
+    closeSync(stdoutFd);
+    closeSync(stderrFd);
+  }
+  const stdout = readFileSync(stdoutPath, "utf8");
+  const stderr = readFileSync(stderrPath, "utf8");
+  rmSync(stdoutPath, { force: true });
+  rmSync(stderrPath, { force: true });
+  if (stdin !== undefined) rmSync(stdinPath, { force: true });
+  return { exitCode, stdout, stderr };
 }
 
 describe("CLI protocol", () => {
