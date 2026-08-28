@@ -58,7 +58,7 @@ function hasCurrentSchema(db: Database): boolean {
   if (version?.value !== SCHEMA_VERSION) return false;
   try {
     db.query("SELECT id,path,type,title,description,status,trust,stale_after,hash,mtime_ms,size_bytes FROM concept LIMIT 0").all();
-    db.query("SELECT id,title,description,tags,body FROM concept_fts LIMIT 0").all();
+    db.query("SELECT id,title,description,tags,search_text FROM concept_fts LIMIT 0").all();
     db.query("SELECT src,rel,dst,origin FROM edge LIMIT 0").all();
     return true;
   } catch {

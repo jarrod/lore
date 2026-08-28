@@ -21,6 +21,26 @@ bun run check
 
 `bun run check` type-checks, tests, compiles the standalone executable, and smoke-tests that executable. Add or update tests for observable behavior changes. Test the compiled binary whenever runtime packaging behavior changes.
 
+Run the non-mutating high-severity dependency audit with:
+
+```bash
+bun run audit
+```
+
+Optional Bun 1.4 diagnostics write disposable reports under the ignored `dist` directory:
+
+```bash
+bun run analyze:build
+bun run profile:index:cpu
+bun run profile:index:heap
+```
+
+The index profilers rebuild the graph fixture 100 times by default. To profile a real bundle without modifying it, supply an absolute or relative bundle path; custom bundles default to one iteration:
+
+```bash
+bun run profile:index:cpu -- --bundle /path/to/knowledge --iterations 5
+```
+
 ## Pull requests
 
 - Create a branch from the current `main` branch.

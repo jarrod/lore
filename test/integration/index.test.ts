@@ -93,6 +93,40 @@ describe("derived index", () => {
     expect(findConcepts(opened.db, "oldtoken", {})).toHaveLength(0);
     unlinkSync(freshnessPath);
     await refreshIndex(opened.db, bundle);
+
+    const semanticPath = path.join(bundle, "semantic-search.md");
+    writeFileSync(semanticPath, `---
+type: Note
+---
+# headingtoken
+
+[linklabeltoken](destinationnoisetoken.md)
+
+![imagealttoken](imagenoisetoken.png)
+
+| tabletoken |
+| --- |
+| tablevaluetoken |
+
+\`inlinecodetoken\`
+
+\`\`\`languageonlytoken
+fencedcodetoken = true
+\`\`\`
+
+<span data-secret="htmlattributetoken">visiblehtmltoken</span>
+
+<div>htmlblocktoken</div>
+`);
+    await refreshIndex(opened.db, bundle);
+    for (const token of ["headingtoken", "linklabeltoken", "imagealttoken", "tabletoken", "tablevaluetoken", "inlinecodetoken", "fencedcodetoken", "visiblehtmltoken"]) {
+      expect((findConcepts(opened.db, token, {}) as Array<{ id: string }>).map((row) => row.id)).toEqual(["semantic-search"]);
+    }
+    for (const token of ["destinationnoisetoken", "imagenoisetoken", "languageonlytoken", "htmlattributetoken", "htmlblocktoken"]) {
+      expect(findConcepts(opened.db, token, {})).toHaveLength(0);
+    }
+    unlinkSync(semanticPath);
+    await refreshIndex(opened.db, bundle);
     opened.db.close();
     opened = openDatabase(bundle, true);
     await refreshIndex(opened.db, bundle);
@@ -107,12 +141,23 @@ describe("derived index", () => {
     const dbPath = cachePath(legacyBundle);
     mkdirSync(path.dirname(dbPath), { recursive: true });
     const legacy = new Database(dbPath, { create: true });
-    legacy.exec("CREATE TABLE concept (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, type TEXT NOT NULL)");
+    legacy.exec(`
+      CREATE TABLE concept (
+        id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, type TEXT NOT NULL, title TEXT, description TEXT,
+        status TEXT, trust TEXT NOT NULL, stale_after TEXT, hash TEXT NOT NULL, mtime_ms INTEGER, size_bytes INTEGER
+      );
+      CREATE VIRTUAL TABLE concept_fts USING fts5(id,title,description,tags,body);
+      CREATE TABLE edge (src TEXT NOT NULL, rel TEXT NOT NULL, dst TEXT NOT NULL, origin TEXT NOT NULL, PRIMARY KEY (src,rel,dst,origin));
+      CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO meta(key,value) VALUES ('schema_version','3');
+    `);
     legacy.close();
 
     const opened = openDatabase(legacyBundle);
     expect(opened.rebuilt).toBeTrue();
     expect((await refreshIndex(opened.db, legacyBundle)).concepts).toBe(7);
+    expect(opened.db.query("SELECT value FROM meta WHERE key='schema_version'").get()).toEqual({ value: "4" });
+    expect(opened.db.query("SELECT search_text FROM concept_fts LIMIT 1").get()).not.toBeNull();
     opened.db.close();
   });
 });

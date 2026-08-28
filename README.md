@@ -115,7 +115,7 @@ Every knowledge command operates on one bundle. Resolution order is `--bundle`, 
 
 `OKF_BUNDLE` is optional. It is only a shortcut for selecting a bundle without repeating `--bundle`; it does not control where Lore stores knowledge. For ordinary software repositories, do not use the repository root as the bundle because unrelated Markdown files such as `README.md` are not OKF concepts.
 
-`find` searches concept IDs, titles, descriptions, tags, and bodies. Multi-term searches rank concepts matching every term first, then fill unused result slots with broader any-term matches. `get` preserves raw frontmatter and also reports derived trust and `effective_status`; an absent status is effectively `stable`. With `graph --to`, explicit direction and depth options constrain the shortest path, while an omitted path depth defaults to 8.
+`find` searches concept IDs, titles, descriptions, tags, and semantic text derived from Markdown bodies. Searchable body text includes visible link labels, image descriptions, tables, and code while excluding link destinations and Markdown or raw-HTML markup. Multi-term searches rank concepts matching every term first, then fill unused result slots with broader any-term matches. `get` preserves raw frontmatter and also reports derived trust and `effective_status`; an absent status is effectively `stable`. With `graph --to`, explicit direction and depth options constrain the shortest path, while an omitted path depth defaults to 8.
 
 Success is compact JSON on stdout:
 

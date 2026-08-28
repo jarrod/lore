@@ -92,6 +92,40 @@ function markdownHrefs(body: string): string[] {
   return hrefs;
 }
 
+export function searchableMarkdownText(body: string): string {
+  const block = (children: string): string => `${children}\n`;
+  const cell = (children: string): string => `${children} `;
+  const text = Bun.markdown.render(body, {
+    heading: block,
+    paragraph: block,
+    blockquote: block,
+    code: block,
+    list: block,
+    listItem: block,
+    hr: () => "\n",
+    table: block,
+    thead: block,
+    tbody: block,
+    tr: block,
+    th: cell,
+    td: cell,
+    html: () => "",
+    strong: (children) => children,
+    emphasis: (children) => children,
+    link: (children) => children,
+    image: (children) => children,
+    codespan: (children) => children,
+    strikethrough: (children) => children,
+    text: (value) => isInlineHtmlTag(value) ? "" : value,
+  });
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function isInlineHtmlTag(value: string): boolean {
+  const trimmed = value.trim();
+  return /^<\/?[A-Za-z][^>]*>$/.test(trimmed) || /^<!--(?:[^-]|-(?!->))*-->$/.test(trimmed);
+}
+
 export function extractTypedEdges(frontmatter: Frontmatter): EdgeInput[] {
   const x = frontmatter["x-okf"];
   if (!x || typeof x !== "object" || Array.isArray(x)) return [];

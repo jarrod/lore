@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { validateConceptId } from "../../src/okf/ids";
 import { effectiveStatus, splitDocument, serializeDocument, trustTier, isStale } from "../../src/okf/frontmatter";
-import { extractMarkdownEdges, extractOkfEdges, extractSection, extractTypedEdges, unsafeOkfTargets } from "../../src/okf/markdown";
+import { extractMarkdownEdges, extractOkfEdges, extractSection, extractTypedEdges, searchableMarkdownText, unsafeOkfTargets } from "../../src/okf/markdown";
 import { naturalFtsQuery } from "../../src/index/search";
 import { browserCommand, safeFilename } from "../../src/commands/visualise";
 import { renderVisualisation } from "../../src/visualisation/html";
@@ -76,6 +76,38 @@ describe("OKF primitives", () => {
   test("extracts a section with descendants", () => {
     const body = "# Root\n\n## Authentication\n\nA\n\n### Sessions\n\nB\n\n## Other\n\nC\n";
     expect(extractSection(body, "authentication")).toBe("## Authentication\n\nA\n\n### Sessions\n\nB\n\n");
+  });
+
+  test("derives semantic search text from Markdown", () => {
+    const text = searchableMarkdownText(`# Search heading
+
+[Visible link](hidden-destination.md) ![Image description](hidden-image.png)
+
+| Column |
+| --- |
+| Table value |
+
+\`inlineIdentifier\`
+
+\`\`\`configuration
+fencedIdentifier = true
+\`\`\`
+
+<span data-secret="hiddenAttribute">Visible HTML text</span>
+
+<div>hiddenBlockContent</div>
+`);
+    expect(text).toContain("Search heading");
+    expect(text).toContain("Visible link Image description");
+    expect(text).toContain("Table value");
+    expect(text).toContain("inlineIdentifier");
+    expect(text).toContain("fencedIdentifier = true");
+    expect(text).toContain("Visible HTML text");
+    expect(text).not.toContain("hidden-destination");
+    expect(text).not.toContain("hidden-image");
+    expect(text).not.toContain("hiddenAttribute");
+    expect(text).not.toContain("hiddenBlockContent");
+    expect(text).not.toContain("configuration");
   });
 
   test("escapes natural FTS terms", () => {

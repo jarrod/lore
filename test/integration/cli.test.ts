@@ -14,7 +14,8 @@ beforeAll(() => {
   root = mkdtempSync(path.join(os.tmpdir(), "lore-cli-test-"));
   binary = path.join(root, process.platform === "win32" ? "lore.exe" : "lore");
   const built = Bun.spawnSync([
-    "bun", "build", "--compile", "--define", "__LORE_COMPILED__=true",
+    "bun", "build", "--compile", "--no-compile-autoload-dotenv", "--no-compile-autoload-bunfig",
+    "--define", "__LORE_COMPILED__=true",
     "--outfile", binary, path.join(project, "src/cli.ts"),
   ], { cwd: project, stdout: "pipe", stderr: "pipe" });
   if (built.exitCode !== 0) throw new Error(`Could not build integration executable: ${built.stderr.toString()}`);

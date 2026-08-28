@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import path from "node:path";
 import { loadConcept } from "../okf/bundle";
 import { effectiveStatus, trustTier } from "../okf/frontmatter";
+import { searchableMarkdownText } from "../okf/markdown";
 
 export interface RefreshResult {
   concepts: number;
@@ -70,8 +71,9 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
         concept.sizeBytes,
       );
       const tags = Array.isArray(concept.frontmatter.tags) ? concept.frontmatter.tags.filter((tag): tag is string => typeof tag === "string").join(" ") : "";
-      db.query("INSERT INTO concept_fts(id,title,description,tags,body) VALUES (?,?,?,?,?)").run(
-        concept.id, stringOrNull(concept.frontmatter.title), stringOrNull(concept.frontmatter.description), tags, concept.body,
+      db.query("INSERT INTO concept_fts(id,title,description,tags,search_text) VALUES (?,?,?,?,?)").run(
+        concept.id, stringOrNull(concept.frontmatter.title), stringOrNull(concept.frontmatter.description), tags,
+        searchableMarkdownText(concept.body),
       );
       const insertEdge = db.query("INSERT OR IGNORE INTO edge(src,rel,dst,origin) VALUES (?,?,?,?)");
       for (const edge of concept.edges) insertEdge.run(concept.id, edge.rel, edge.dst, edge.origin);

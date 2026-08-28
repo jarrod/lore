@@ -19,8 +19,12 @@
   },
   "scripts": {
     "test": "bun test",
+    "audit": "bun audit --audit-level=high --json",
     "typecheck": "tsc --noEmit",
-    "build": "bun build ./src/cli.ts --compile --define __LORE_COMPILED__=true --outfile dist/lore",
+    "build": "bun build ./src/cli.ts --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig --define __LORE_COMPILED__=true --outfile dist/lore",
+    "analyze:build": "bun build ./src/cli.ts --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig --define __LORE_COMPILED__=true --metafile-md=dist/lore-build.md --outfile dist/lore-analysis",
+    "profile:index:cpu": "bun --cpu-prof-md --cpu-prof-dir=dist/profiles ./scripts/profile-index.ts",
+    "profile:index:heap": "bun --heap-prof-md --heap-prof-dir=dist/profiles ./scripts/profile-index.ts",
     "dev:setup": "bun run build && dist/lore init",
     "build:targets": "bun scripts/build-targets.ts",
     "smoke": "bun test/smoke.ts",

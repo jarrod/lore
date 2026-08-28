@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'Windows'
         run: bun test ./test/unit/okf.test.ts ./test/integration/index.test.ts
       - name: Build standalone binary
-        run: bun build ./src/cli.ts --compile --define __LORE_COMPILED__=true --outfile dist/${{ matrix.asset }}
+        run: bun build ./src/cli.ts --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig --define __LORE_COMPILED__=true --outfile dist/${{ matrix.asset }}
       - name: Smoke-test standalone binary
         run: bun test/smoke.ts --binary dist/${{ matrix.asset }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

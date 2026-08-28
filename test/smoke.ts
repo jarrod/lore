@@ -33,6 +33,39 @@ try {
     throw new Error("--version did not print only the expected version");
   }
 
+  const cleanEnvironment = { ...Bun.env };
+  delete cleanEnvironment.OKF_BUNDLE;
+  delete cleanEnvironment.OKF_CACHE_DIR;
+  writeFileSync(path.join(initializedRepository, ".env"), "OKF_BUNDLE=/lore/implicit/config/must/not/load\n");
+  writeFileSync(path.join(initializedRepository, "bunfig.toml"), "this is not valid bunfig syntax\n");
+  const implicitConfiguration = Bun.spawnSync([binary, "info"], {
+    cwd: initializedRepository,
+    env: { ...cleanEnvironment, OKF_CACHE_DIR: cache },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (implicitConfiguration.exitCode !== 0) {
+    throw new Error(`compiled binary loaded implicit configuration: ${implicitConfiguration.stderr.toString()}`);
+  }
+  const implicitData = JSON.parse(implicitConfiguration.stdout.toString()) as { ok?: boolean; data?: { concepts?: number } };
+  if (implicitData.ok !== true || implicitData.data?.concepts !== 0) {
+    throw new Error("compiled binary did not use its working directory when implicit configuration was disabled");
+  }
+
+  const explicitConfiguration = Bun.spawnSync([binary, "info"], {
+    cwd: initializedRepository,
+    env: { ...cleanEnvironment, OKF_BUNDLE: bundle, OKF_CACHE_DIR: cache },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (explicitConfiguration.exitCode !== 0) {
+    throw new Error(`compiled binary rejected explicit environment configuration: ${explicitConfiguration.stderr.toString()}`);
+  }
+  const explicitData = JSON.parse(explicitConfiguration.stdout.toString()) as { ok?: boolean; data?: { concepts?: number } };
+  if (explicitData.ok !== true || explicitData.data?.concepts !== 7) {
+    throw new Error("compiled binary did not honour explicit environment configuration");
+  }
+
   const initialized = Bun.spawnSync([binary, "init", "--repo", initializedRepository], {
     stdout: "pipe",
     stderr: "pipe",
