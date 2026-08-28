@@ -1,4 +1,3 @@
-import { writeSync } from "node:fs";
 import { resolveBundle, takeGlobalBundleOption } from "./okf/bundle";
 import { writeFailure, writeSuccess } from "./protocol/result";
 import { invalidArgument } from "./protocol/errors";
@@ -13,12 +12,13 @@ import { TOOL_VERSION } from "./version";
 import { runVisualise } from "./commands/visualise";
 import { runReset } from "./mutation/reset";
 
-async function main(): Promise<never> {
+async function main(): Promise<void> {
   requireCompiledExecutable();
   const rawArgs = Bun.argv.slice(2);
   if (rawArgs.length === 1 && rawArgs[0] === "--version") {
-    writeSync(process.stdout.fd, `${TOOL_VERSION}\n`);
-    process.exit(0);
+    process.stdout.write(`${TOOL_VERSION}\n`);
+    process.exitCode = 0;
+    return;
   }
   const parsed = takeGlobalBundleOption(rawArgs);
   const command = parsed.args.shift();
