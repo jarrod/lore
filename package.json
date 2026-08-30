@@ -1,0 +1,37 @@
+{
+  "name": "lore",
+  "version": "0.1.0",
+  "description": "A deterministic command-line runtime for Open Knowledge Format bundles",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jarrod/lore.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jarrod/lore/issues"
+  },
+  "homepage": "https://github.com/jarrod/lore#readme",
+  "type": "module",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "engines": {
+    "bun": "1.4.0"
+  },
+  "scripts": {
+    "test": "bun test",
+    "audit": "bun audit --audit-level=high --json",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build ./src/cli.ts --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig --define __LORE_COMPILED__=true --outfile dist/lore",
+    "analyze:build": "bun build ./src/cli.ts --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig --define __LORE_COMPILED__=true --metafile-md=dist/lore-build.md --outfile dist/lore-analysis",
+    "profile:index:cpu": "bun --cpu-prof-md --cpu-prof-dir=dist/profiles ./scripts/profile-index.ts",
+    "profile:index:heap": "bun --heap-prof-md --heap-prof-dir=dist/profiles ./scripts/profile-index.ts",
+    "dev:setup": "bun run build && dist/lore init",
+    "build:targets": "bun scripts/build-targets.ts",
+    "smoke": "bun test/smoke.ts",
+    "check": "bun run typecheck && bun test && bun run build && bun run smoke"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.0",
+    "typescript": "5.9.3"
+  }
+}

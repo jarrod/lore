@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use Lore"
+  short_description: "Operate a repository-local Lore knowledge bundle"
+  default_prompt: "Use $use-lore as the operational interface to this repository's Lore bundle, preserving the knowledge policy supplied by the consumer."
