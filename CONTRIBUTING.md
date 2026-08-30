@@ -57,6 +57,8 @@ Pull requests require passing CI and maintainer review. The repository uses squa
 
 Maintainers publish releases by updating the package and tool versions together, merging the change to `main`, and pushing the matching `v<version>` tag. GitHub Actions builds and smoke-tests every supported executable before creating the release.
 
+The repository-local [`release-lore` skill](.github/skills/release-lore/SKILL.md) guides maintainers through the protected pull request, tagging, workflow monitoring, and release verification sequence.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the Apache License 2.0.

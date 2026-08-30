@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Lore"
+  short_description: "Publish a verified Lore GitHub release"
+  default_prompt: "Use $release-lore to publish the current Lore version through its protected pull request and tagged GitHub release workflow."
