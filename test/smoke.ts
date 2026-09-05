@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -78,8 +79,8 @@ try {
   if (localInfo.exitCode !== 0) throw new Error(localInfo.stderr.toString());
   const info = JSON.parse(localInfo.stdout.toString()).data;
   if (
-    info.bundle !== initData.data.bundle ||
-    !info.cache.path.startsWith(initData.data.cache + path.sep)
+    realpathSync(info.bundle) !== realpathSync(initData.data.bundle) ||
+    realpathSync(path.dirname(path.dirname(info.cache.path))) !== realpathSync(initData.data.cache)
   ) {
     throw new Error("installed binary did not use local knowledge and cache");
   }
@@ -89,7 +90,8 @@ try {
   });
   if (
     preview.exitCode !== 0 ||
-    JSON.parse(preview.stdout.toString()).data.bundle !== initData.data.bundle
+    realpathSync(JSON.parse(preview.stdout.toString()).data.bundle) !==
+      realpathSync(initData.data.bundle)
   ) {
     throw new Error("reset did not default to installed knowledge");
   }
@@ -100,7 +102,8 @@ try {
   });
   if (
     fromCwd.exitCode !== 0 ||
-    JSON.parse(fromCwd.stdout.toString()).data.bundle !== initData.data.bundle
+    realpathSync(JSON.parse(fromCwd.stdout.toString()).data.bundle) !==
+      realpathSync(initData.data.bundle)
   ) {
     throw new Error("uninstalled binary did not resolve working-directory local knowledge");
   }
