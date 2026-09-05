@@ -4,12 +4,19 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
-  realpathSync,
+  statSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+
+// Windows can report the same directory through both an 8.3 alias and its long path.
+function sameDirectory(left: string, right: string): boolean {
+  const a = statSync(left, { bigint: true });
+  const b = statSync(right, { bigint: true });
+  return a.isDirectory() && b.isDirectory() && a.ino !== 0n && a.dev === b.dev && a.ino === b.ino;
+}
 
 const project = path.resolve(import.meta.dir, "..");
 const binaryOption = Bun.argv.indexOf("--binary");
@@ -79,8 +86,8 @@ try {
   if (localInfo.exitCode !== 0) throw new Error(localInfo.stderr.toString());
   const info = JSON.parse(localInfo.stdout.toString()).data;
   if (
-    realpathSync(info.bundle) !== realpathSync(initData.data.bundle) ||
-    realpathSync(path.dirname(path.dirname(info.cache.path))) !== realpathSync(initData.data.cache)
+    !sameDirectory(info.bundle, initData.data.bundle) ||
+    !sameDirectory(path.dirname(path.dirname(info.cache.path)), initData.data.cache)
   ) {
     throw new Error(
       `installed binary did not use local knowledge and cache: ${JSON.stringify({ info, initialized: initData.data })}`,
@@ -92,8 +99,7 @@ try {
   });
   if (
     preview.exitCode !== 0 ||
-    realpathSync(JSON.parse(preview.stdout.toString()).data.bundle) !==
-      realpathSync(initData.data.bundle)
+    !sameDirectory(JSON.parse(preview.stdout.toString()).data.bundle, initData.data.bundle)
   ) {
     throw new Error("reset did not default to installed knowledge");
   }
@@ -104,8 +110,7 @@ try {
   });
   if (
     fromCwd.exitCode !== 0 ||
-    realpathSync(JSON.parse(fromCwd.stdout.toString()).data.bundle) !==
-      realpathSync(initData.data.bundle)
+    !sameDirectory(JSON.parse(fromCwd.stdout.toString()).data.bundle, initData.data.bundle)
   ) {
     throw new Error("uninstalled binary did not resolve working-directory local knowledge");
   }
