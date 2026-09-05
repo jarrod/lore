@@ -3,7 +3,12 @@ import { existsSync, realpathSync, statSync } from "node:fs";
 import { invalidArgument, invalidOkf, notFound } from "../protocol/errors";
 import { compareStrings, idFromRelativePath } from "./ids";
 import { splitDocument, type Frontmatter } from "./frontmatter";
-import { extractMarkdownEdges, extractOkfEdges, extractTypedEdges, type EdgeInput } from "./markdown";
+import {
+  extractMarkdownEdges,
+  extractOkfEdges,
+  extractTypedEdges,
+  type EdgeInput,
+} from "./markdown";
 
 export interface Concept {
   id: string;
@@ -19,36 +24,78 @@ export interface Concept {
 
 export async function loadConcept(bundle: string, relative: string): Promise<Concept> {
   let id: string;
-  try { id = idFromRelativePath(relative); }
-  catch (error) { throw invalidOkf("Concept has an invalid concept ID", { source: relative, reason: error instanceof Error ? error.message : String(error) }); }
+  try {
+    id = idFromRelativePath(relative);
+  } catch (error) {
+    throw invalidOkf("Concept has an invalid concept ID", {
+      source: relative,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
   const absolutePath = path.join(bundle, relative);
   const file = Bun.file(absolutePath);
   const [content, stat] = await Promise.all([file.text(), file.stat()]);
   const parsed = splitDocument(content, relative);
   const hash = new Bun.CryptoHasher("sha256").update(content).digest("hex");
   let typedEdges;
-  try { typedEdges = extractTypedEdges(parsed.frontmatter); }
-  catch (error) { throw invalidOkf("Concept has malformed x-okf.rel", { source: relative, reason: error instanceof Error ? error.message : String(error) }); }
-  const edges = [...extractMarkdownEdges(parsed.body, id), ...extractOkfEdges(parsed.frontmatter, id), ...typedEdges];
-  return { id, path: relative.split(path.sep).join("/"), absolutePath, ...parsed, hash, mtimeMs: stat.mtimeMs, sizeBytes: stat.size, edges };
+  try {
+    typedEdges = extractTypedEdges(parsed.frontmatter);
+  } catch (error) {
+    throw invalidOkf("Concept has malformed x-okf.rel", {
+      source: relative,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+  const edges = [
+    ...extractMarkdownEdges(parsed.body, id),
+    ...extractOkfEdges(parsed.frontmatter, id),
+    ...typedEdges,
+  ];
+  return {
+    id,
+    path: relative.split(path.sep).join("/"),
+    absolutePath,
+    ...parsed,
+    hash,
+    mtimeMs: stat.mtimeMs,
+    sizeBytes: stat.size,
+    edges,
+  };
 }
 
 export function resolveBundle(explicit?: string): string {
-  const candidate = explicit ?? process.env.OKF_BUNDLE ?? process.cwd();
+  const executableDirectory = path.dirname(realpathSync(process.execPath));
+  const installedRoot =
+    path.basename(executableDirectory) === "bin" &&
+    path.basename(path.dirname(executableDirectory)) === ".lore"
+      ? path.dirname(executableDirectory)
+      : path.join(process.cwd(), ".lore");
+  const candidate = explicit ?? path.join(installedRoot, "knowledge");
   const absolute = path.resolve(candidate);
-  if (!existsSync(absolute)) throw notFound("BUNDLE_NOT_FOUND", "Bundle does not exist", { path: absolute });
+  if (!existsSync(absolute))
+    throw notFound("BUNDLE_NOT_FOUND", "Bundle does not exist", { path: absolute });
   try {
     const resolved = realpathSync(absolute);
     if (!statSync(resolved).isDirectory()) throw new Error("not a directory");
     return resolved;
-  } catch { throw notFound("BUNDLE_NOT_FOUND", "Bundle is not an accessible directory", { path: absolute }); }
+  } catch {
+    throw notFound("BUNDLE_NOT_FOUND", "Bundle is not an accessible directory", { path: absolute });
+  }
 }
 
-export async function scanBundle(bundle: string, tolerateInvalid = false): Promise<{ concepts: Concept[]; failures: Array<{ path: string; error: unknown }> }> {
+export async function scanBundle(
+  bundle: string,
+  tolerateInvalid = false,
+): Promise<{ concepts: Concept[]; failures: Array<{ path: string; error: unknown }> }> {
   const concepts: Concept[] = [];
   const failures: Array<{ path: string; error: unknown }> = [];
   const glob = new Bun.Glob("**/*.md");
-  for await (const relative of glob.scan({ cwd: bundle, dot: false, onlyFiles: true, followSymlinks: false })) {
+  for await (const relative of glob.scan({
+    cwd: bundle,
+    dot: false,
+    onlyFiles: true,
+    followSymlinks: false,
+  })) {
     const parts = relative.split(/[\\/]/);
     if (parts.some((part) => part.startsWith("."))) continue;
     const name = parts.at(-1);

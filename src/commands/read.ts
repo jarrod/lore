@@ -36,14 +36,20 @@ export async function runInfo(bundle: string, args: string[]): Promise<unknown> 
         browser_open: ["darwin", "linux", "win32"].includes(process.platform),
       },
     };
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 }
 
 export async function runIndex(bundle: string, args: string[]): Promise<unknown> {
   const rebuild = takeFlag(args, "--rebuild");
   ensureNoArgs(args);
   const { db } = openDatabase(bundle, rebuild);
-  try { return await refreshIndex(db, bundle); } finally { db.close(); }
+  try {
+    return await refreshIndex(db, bundle);
+  } finally {
+    db.close();
+  }
 }
 
 export async function runFind(bundle: string, args: string[]): Promise<unknown> {
@@ -61,7 +67,9 @@ export async function runFind(bundle: string, args: string[]): Promise<unknown> 
   try {
     await refreshIndex(db, bundle);
     return { results: findConcepts(db, query, { type, tag, status, scope, limit }) };
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 }
 
 export async function runGet(bundle: string, args: string[]): Promise<unknown> {
@@ -70,20 +78,44 @@ export async function runGet(bundle: string, args: string[]): Promise<unknown> {
   const section = takeOption(args, "--section");
   ensureNoArgs(args);
   const { db } = openDatabase(bundle);
-  try { await refreshIndex(db, bundle); } finally { db.close(); }
+  try {
+    await refreshIndex(db, bundle);
+  } finally {
+    db.close();
+  }
   const filePath = conceptPath(bundle, id);
   if (!existsSync(filePath)) throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id });
   let resolvedPath: string;
-  try { resolvedPath = realpathSync(filePath); }
-  catch { throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id }); }
+  try {
+    resolvedPath = realpathSync(filePath);
+  } catch {
+    throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id });
+  }
   assertBundlePath(bundle, resolvedPath, id);
   const content = await readFile(resolvedPath, "utf8");
   const parsed = splitDocument(content, id);
   const hash = new Bun.CryptoHasher("sha256").update(content).digest("hex");
-  if (!section) return { id, hash, trust: trustTier(parsed.frontmatter), effective_status: effectiveStatus(parsed.frontmatter), frontmatter: parsed.frontmatter, body: parsed.body };
+  if (!section)
+    return {
+      id,
+      hash,
+      trust: trustTier(parsed.frontmatter),
+      effective_status: effectiveStatus(parsed.frontmatter),
+      frontmatter: parsed.frontmatter,
+      body: parsed.body,
+    };
   const body = extractSection(parsed.body, section);
-  if (body === undefined) throw notFound("SECTION_NOT_FOUND", "Section does not exist", { id, section });
-  return { id, hash, trust: trustTier(parsed.frontmatter), effective_status: effectiveStatus(parsed.frontmatter), frontmatter: parsed.frontmatter, section, body };
+  if (body === undefined)
+    throw notFound("SECTION_NOT_FOUND", "Section does not exist", { id, section });
+  return {
+    id,
+    hash,
+    trust: trustTier(parsed.frontmatter),
+    effective_status: effectiveStatus(parsed.frontmatter),
+    frontmatter: parsed.frontmatter,
+    section,
+    body,
+  };
 }
 
 export async function runGraph(bundle: string, args: string[]): Promise<unknown> {
@@ -91,12 +123,15 @@ export async function runGraph(bundle: string, args: string[]): Promise<unknown>
   if (!root) throw invalidArgument("graph requires a concept ID");
   validateConceptId(root);
   const direction = (takeOption(args, "--direction") ?? "both") as Direction;
-  if (!(["in", "out", "both"] as string[]).includes(direction)) throw invalidArgument("Invalid graph direction", { direction });
+  if (!(["in", "out", "both"] as string[]).includes(direction))
+    throw invalidArgument("Invalid graph direction", { direction });
   const depthRaw = takeOption(args, "--depth");
   const depth = depthRaw === undefined ? 1 : Number(depthRaw);
-  if (!Number.isInteger(depth) || depth < 1 || depth > 8) throw invalidArgument("--depth must be between 1 and 8");
+  if (!Number.isInteger(depth) || depth < 1 || depth > 8)
+    throw invalidArgument("--depth must be between 1 and 8");
   const rel = takeOption(args, "--rel");
-  if (rel && !/^[a-z][a-z0-9_]*$/.test(rel)) throw invalidArgument("Invalid relationship filter", { rel });
+  if (rel && !/^[a-z][a-z0-9_]*$/.test(rel))
+    throw invalidArgument("Invalid relationship filter", { rel });
   const to = takeOption(args, "--to");
   if (to) validateConceptId(to);
   ensureNoArgs(args);
@@ -106,14 +141,25 @@ export async function runGraph(bundle: string, args: string[]): Promise<unknown>
     requireConcept(db, root);
     if (to) {
       requireConcept(db, to);
-      return { root, target: to, ...shortestPath(db, root, to, { direction, rel, maxDepth: depthRaw === undefined ? 8 : depth }) };
+      return {
+        root,
+        target: to,
+        ...shortestPath(db, root, to, {
+          direction,
+          rel,
+          maxDepth: depthRaw === undefined ? 8 : depth,
+        }),
+      };
     }
     return { root, ...graphTraversal(db, root, direction, depth, rel) };
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 }
 
 function requireConcept(db: Database, id: string): void {
-  if (!db.query("SELECT 1 FROM concept WHERE id=?").get(id)) throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id });
+  if (!db.query("SELECT 1 FROM concept WHERE id=?").get(id))
+    throw notFound("CONCEPT_NOT_FOUND", "Concept does not exist", { id });
 }
 
 async function declaredVersion(bundle: string): Promise<string> {
@@ -125,5 +171,7 @@ async function declaredVersion(bundle: string): Promise<string> {
   try {
     const parsed = Bun.YAML.parse(match[1] ?? "") as Record<string, unknown>;
     return typeof parsed?.okf_version === "string" ? parsed.okf_version : "0.2";
-  } catch { return "0.2"; }
+  } catch {
+    return "0.2";
+  }
 }

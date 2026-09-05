@@ -11,36 +11,30 @@ Use Lore as a deterministic interface to an OKF knowledge bundle. Lore owns stor
 
 1. Determine the repository root being worked on.
 2. Use `<repo-root>/.lore/bin/lore.exe` on Windows and `<repo-root>/.lore/bin/lore` on macOS or Linux. Refer to the selected path as `<lore-executable>` below.
-3. If it is absent, stop and tell the user to obtain a trusted standalone executable and run `<downloaded-lore> init --repo <repo-root>`.
+3. If it is absent, use setup-lore when available and installation is requested; otherwise explain that the standalone executable must be installed first.
 4. Run `<lore-executable> --help` before first use. Installed help is authoritative for the binary version.
 
 ## Select the Bundle
 
-Use a bundle explicitly supplied by the user. Otherwise use `<repo-root>/.lore/knowledge`. If repository setup is authorized and that directory is absent, initialize the repository with the standalone executable.
+The installed executable defaults to its sibling `.lore/knowledge`, with cache data in `.lore/cache`. Call it by its absolute path; no working-directory change is needed. Use `--bundle <path>` only when the user selects another bundle.
 
-For repository-local knowledge, set `OKF_CACHE_DIR` to `<repo-root>/.lore/cache` in the command environment, then run:
-
-```text
-<lore-executable> <command> --bundle <repo-root>/.lore/knowledge
-```
-
-Do not use an ordinary source root as a bundle. Keep the disposable cache outside the authoritative knowledge directory.
+Check installed help: older releases such as v0.1.0 need `--bundle <repo-root>/.lore/knowledge` on knowledge commands. Offer setup-lore for an upgrade when newer releases are available.
 
 ## Command Contract
 
-| Command | Use it for |
-| --- | --- |
-| `init` | Install the current executable and create repository-local Lore directories. |
-| `info` | Inspect bundle identity, versions, counts, cache state, and capabilities. |
-| `index` | Refresh derived state; use `--rebuild` to recreate it from authoritative Markdown. |
-| `find` | Search by natural lexical query with optional type, tag, status, scope, and limit filters. |
-| `get` | Retrieve one canonical concept, its hash, frontmatter, body, or an exact Markdown section. |
-| `graph` | Query relationships, backlinks, neighbourhoods, and shortest paths as structured JSON. |
-| `visualise` | Generate a disposable HTML graph when the user requests a human-readable view. |
-| `put` | Create, merge, or explicitly replace one concept from a JSON request on stdin. |
-| `status` | Change only the OKF lifecycle status with optional optimistic concurrency. |
-| `check` | Validate the bundle; use `--strict` when warnings must fail the operation. |
-| `reset` | Preview or explicitly confirm a complete recoverable or permanent knowledge reset. |
+| Command     | Use it for                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------ |
+| `init`      | Install the current executable and create repository-local Lore directories.               |
+| `info`      | Inspect bundle identity, versions, counts, cache state, and capabilities.                  |
+| `index`     | Refresh derived state; use `--rebuild` to recreate it from authoritative Markdown.         |
+| `find`      | Search by natural lexical query with optional type, tag, status, scope, and limit filters. |
+| `get`       | Retrieve one canonical concept, its hash, frontmatter, body, or an exact Markdown section. |
+| `graph`     | Query relationships, backlinks, neighbourhoods, and shortest paths as structured JSON.     |
+| `visualise` | Generate a disposable HTML graph when the user requests a human-readable view.             |
+| `put`       | Create, merge, or explicitly replace one concept from a JSON request on stdin.             |
+| `status`    | Change only the OKF lifecycle status with optional optimistic concurrency.                 |
+| `check`     | Validate the bundle; use `--strict` when warnings must fail the operation.                 |
+| `reset`     | Preview or explicitly confirm a complete recoverable or permanent knowledge reset.         |
 
 Use `<lore-executable> <command> --help` for the exact options and protocol supported by the installed version.
 
@@ -67,7 +61,7 @@ Use `put` as the content mutation primitive rather than editing concept Markdown
 ```json
 {
   "mode": "merge",
-  "frontmatter": {"type": "consumer-selected-type"},
+  "frontmatter": { "type": "consumer-selected-type" },
   "body_file": "/absolute/path/to/content.md",
   "relations": [["consumer_selected_relation", "target-concept"]],
   "expected_hash": "hash-returned-by-get"
@@ -88,8 +82,8 @@ On a conflict, reread current content and return control to the calling workflow
 
 A reset requires an explicit user request to clear the complete resolved bundle. Never infer reset permission from initialization, cache rebuilding, deletion of one concept, cleanup, or validation repair.
 
-Run `reset --knowledge --bundle <explicit-path>` without `--confirm` first. This read-only preview returns the canonical bundle, counts, byte size, mode, recoverability, and a state-derived confirmation token. Verify the target and show or use the preview as required by the caller's authorization model.
+Run `reset --knowledge` without `--confirm` first. This read-only preview returns the canonical bundle, counts, byte size, mode, recoverability, and a state-derived confirmation token. For a user-selected external bundle, pass the same explicit `--bundle` on preview and confirmation. Verify the target and show or use the preview as required by the caller's authorization model.
 
-Only then pass the exact token to `reset --knowledge --bundle <same-path> --confirm <token>`. Do not reuse a token across turns or retry a conflict without generating a fresh preview. A normal reset is recoverable and reports its backup path.
+Only then pass the exact token to `reset --knowledge --confirm <token>`. Do not reuse a token across turns or retry a conflict without generating a fresh preview. A normal reset is recoverable and reports its backup path.
 
 Use `--no-backup` only when the current request explicitly authorizes a permanent, unrecoverable reset. Include it in both preview and confirmation, verify `mode: permanent` and `recoverable: false`, and report that Lore retained no backup.

@@ -30,6 +30,10 @@ export function conceptPath(bundle: string, id: string): string {
 
 export function assertBundlePath(bundle: string, candidate: string, id: string): string {
   const relative = path.relative(bundle, candidate);
-  if (relative === "" || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`))) return candidate;
+  if (
+    relative === "" ||
+    (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`))
+  )
+    return candidate;
   throw invalidArgument("Concept path escapes bundle", { id });
 }

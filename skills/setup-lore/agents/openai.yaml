@@ -1,0 +1,4 @@
+interface:
+  display_name: "Set up Lore"
+  short_description: "Install or upgrade repository-local Lore"
+  default_prompt: "Use $setup-lore to install Lore in this repository."

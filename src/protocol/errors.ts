@@ -35,4 +35,9 @@ export const unsupported = (message: string, details?: Record<string, unknown>) 
   new LoreError("UNSUPPORTED_CAPABILITY", message, EXIT.unsupported, details);
 
 export const graphTooLarge = (details: Record<string, unknown>) =>
-  new LoreError("GRAPH_TOO_LARGE", "Selected graph exceeds the visualisation node limit", EXIT.unsupported, details);
+  new LoreError(
+    "GRAPH_TOO_LARGE",
+    "Selected graph exceeds the visualisation node limit",
+    EXIT.unsupported,
+    details,
+  );

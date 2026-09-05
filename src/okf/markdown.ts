@@ -63,13 +63,21 @@ function okfPathFields(frontmatter: Frontmatter): Array<{ rel: string; value: st
   return fields;
 }
 
-function addStringField(fields: Array<{ rel: string; value: string }>, rel: string, value: unknown): void {
+function addStringField(
+  fields: Array<{ rel: string; value: string }>,
+  rel: string,
+  value: unknown,
+): void {
   if (typeof value === "string") fields.push({ rel, value });
 }
 
-function resolveConceptTarget(raw: string, sourceDir: string): { id?: string; unsafe?: true } | undefined {
+function resolveConceptTarget(
+  raw: string,
+  sourceDir: string,
+): { id?: string; unsafe?: true } | undefined {
   const href = raw.split("#", 1)[0]?.split("?", 1)[0] ?? "";
-  if (!href.endsWith(".md") || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return undefined;
+  if (!href.endsWith(".md") || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//"))
+    return undefined;
   const basename = path.posix.basename(href);
   if (basename === "index.md" || basename === "log.md") return undefined;
   const resolved = href.startsWith("/")
@@ -86,7 +94,10 @@ function resolveConceptTarget(raw: string, sourceDir: string): { id?: string; un
 function markdownHrefs(body: string): string[] {
   const hrefs: string[] = [];
   Bun.markdown.render(body, {
-    link: (children, meta) => { hrefs.push(meta.href); return children; },
+    link: (children, meta) => {
+      hrefs.push(meta.href);
+      return children;
+    },
     image: () => "",
   });
   return hrefs;
@@ -116,7 +127,7 @@ export function searchableMarkdownText(body: string): string {
     image: (children) => children,
     codespan: (children) => children,
     strikethrough: (children) => children,
-    text: (value) => isInlineHtmlTag(value) ? "" : value,
+    text: (value) => (isInlineHtmlTag(value) ? "" : value),
   });
   return text.replace(/\s+/g, " ").trim();
 }
@@ -132,27 +143,44 @@ export function extractTypedEdges(frontmatter: Frontmatter): EdgeInput[] {
   const rels = (x as Record<string, unknown>).rel;
   if (rels === undefined) return [];
   if (!Array.isArray(rels)) throw new Error("x-okf.rel must be an array");
-  return dedupeEdges(rels.map((entry) => {
-    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || typeof entry[1] !== "string") {
-      throw new Error("x-okf.rel entries must be [relationship, concept-id] tuples");
-    }
-    if (!/^[a-z][a-z0-9_]*$/.test(entry[0])) throw new Error(`Invalid relationship: ${entry[0]}`);
-    return { rel: entry[0], dst: validateConceptId(entry[1]), origin: "typed" as const };
-  }));
+  return dedupeEdges(
+    rels.map((entry) => {
+      if (
+        !Array.isArray(entry) ||
+        entry.length !== 2 ||
+        typeof entry[0] !== "string" ||
+        typeof entry[1] !== "string"
+      ) {
+        throw new Error("x-okf.rel entries must be [relationship, concept-id] tuples");
+      }
+      if (!/^[a-z][a-z0-9_]*$/.test(entry[0])) throw new Error(`Invalid relationship: ${entry[0]}`);
+      return { rel: entry[0], dst: validateConceptId(entry[1]), origin: "typed" as const };
+    }),
+  );
 }
 
 function dedupeEdges(edges: EdgeInput[]): EdgeInput[] {
-  return [...new Map(edges.map((edge) => [`${edge.rel}\0${edge.dst}\0${edge.origin}`, edge])).values()];
+  return [
+    ...new Map(edges.map((edge) => [`${edge.rel}\0${edge.dst}\0${edge.origin}`, edge])).values(),
+  ];
 }
 
 export function extractSection(body: string, requested: string): string | undefined {
-  const normalize = (value: string) => value.trim().replace(/\s+/g, " ").replace(/\s+#+$/, "").toLowerCase();
+  const normalize = (value: string) =>
+    value
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/\s+#+$/, "")
+      .toLowerCase();
   const lines = body.split(/(?<=\n)/);
   const headings: Array<{ index: number; level: number; title: string }> = [];
   let fenced = false;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index] ?? "";
-    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
+    if (/^\s*(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
     if (fenced) continue;
     const atx = /^(#{1,6})\s+(.+?)(?:\r?\n)?$/.exec(line);
     if (atx) headings.push({ index, level: atx[1]!.length, title: atx[2]! });
@@ -161,8 +189,12 @@ export function extractSection(body: string, requested: string): string | undefi
       headings.push({ index, level: next.trim().startsWith("=") ? 1 : 2, title: line.trim() });
     }
   }
-  const startHeading = headings.find((heading) => normalize(heading.title) === normalize(requested));
+  const startHeading = headings.find(
+    (heading) => normalize(heading.title) === normalize(requested),
+  );
   if (!startHeading) return undefined;
-  const following = headings.find((heading) => heading.index > startHeading.index && heading.level <= startHeading.level);
+  const following = headings.find(
+    (heading) => heading.index > startHeading.index && heading.level <= startHeading.level,
+  );
   return lines.slice(startHeading.index, following?.index ?? lines.length).join("");
 }

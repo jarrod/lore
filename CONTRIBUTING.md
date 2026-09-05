@@ -19,7 +19,11 @@ bun install --frozen-lockfile
 bun run check
 ```
 
-`bun run check` type-checks, tests, compiles the standalone executable, and smoke-tests that executable. Add or update tests for observable behavior changes. Test the compiled binary whenever runtime packaging behavior changes.
+`bun run check` runs lint, formatting, unused-code and type checks, tests, standalone compilation, and executable smoke tests. Add or update tests for observable behavior changes. Test the compiled binary whenever runtime packaging behavior changes.
+
+Use `bun run fmt` to apply formatting before committing. The individual read-only checks are `bun run lint` (Oxlint), `bun run fmt:check` (Oxfmt), and `bun run knip` (unused files, exports, and dependencies). Run all three with `bun run hygiene:check`; CI requires them alongside platform tests and the dependency audit. These tools are development-only and do not affect the shipped executable.
+
+Formatting excludes generated content and OKF fixtures, whose exact Markdown is test data. Knip discovers script and test entry points from package scripts and Bun conventions; declare new entry points only when automatic discovery cannot identify legitimate usage. Review findings before deleting code or dependencies.
 
 Run the non-mutating high-severity dependency audit with:
 

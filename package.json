@@ -1,22 +1,18 @@
 {
   "name": "lore",
   "version": "0.1.0",
+  "private": true,
   "description": "A deterministic command-line runtime for Open Knowledge Format bundles",
+  "homepage": "https://github.com/jarrod/lore#readme",
+  "bugs": {
+    "url": "https://github.com/jarrod/lore/issues"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jarrod/lore.git"
   },
-  "bugs": {
-    "url": "https://github.com/jarrod/lore/issues"
-  },
-  "homepage": "https://github.com/jarrod/lore#readme",
   "type": "module",
-  "private": true,
-  "packageManager": "bun@1.4.0",
-  "engines": {
-    "bun": "1.4.0"
-  },
   "scripts": {
     "test": "bun test",
     "audit": "bun audit --audit-level=high --json",
@@ -28,10 +24,22 @@
     "dev:setup": "bun run build && dist/lore init",
     "build:targets": "bun scripts/build-targets.ts",
     "smoke": "bun test/smoke.ts",
-    "check": "bun run typecheck && bun test && bun run build && bun run smoke"
+    "lint": "oxlint --deny-warnings",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "knip": "knip",
+    "hygiene:check": "bun run lint && bun run fmt:check && bun run knip",
+    "check": "bun run hygiene:check && bun run typecheck && bun test && bun run build && bun run smoke"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",
+    "knip": "6.34.0",
+    "oxfmt": "0.66.0",
+    "oxlint": "1.81.0",
     "typescript": "7.0.2"
-  }
+  },
+  "engines": {
+    "bun": "1.4.0"
+  },
+  "packageManager": "bun@1.4.0"
 }

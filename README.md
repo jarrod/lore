@@ -8,87 +8,44 @@ Lore is a small, agent-native command-line runtime for [Open Knowledge Format v0
 
 OKF Markdown and YAML remain authoritative. Lore builds a disposable SQLite cache for FTS5/BM25 search, backlinks, typed graph relationships, traversal, and incremental indexing. It embeds no LLM, server, network service, or external database.
 
-## Install
+## Install and set up
 
-Download the standalone executable from the [latest GitHub Release](https://github.com/jarrod/lore/releases/latest). Lore includes its runtime and SQLite, so Bun, Node.js, npm, and a separate SQLite installation are not required.
-
-Choose the asset for your system:
-
-| System | Architecture | Asset |
-| --- | --- | --- |
-| macOS | Apple Silicon (`arm64`) | `lore-darwin-arm64` |
-| macOS | Intel (`x86_64`) | `lore-darwin-x64` |
-| Linux | Intel/AMD 64-bit (`x86_64`) | `lore-linux-x64` |
-| Linux | ARM 64-bit (`aarch64` or `arm64`) | `lore-linux-arm64` |
-| Windows | Intel/AMD 64-bit | `lore-windows-x64.exe` |
-
-You can check a macOS or Linux machine with `uname -m`.
-
-### macOS
-
-Run these commands in Terminal. The example selects Apple Silicon; change `LORE_ASSET` to `lore-darwin-x64` on an Intel Mac.
+From the repository where you want to use Lore, install its public skills with the [skills.sh installer](https://skills.sh/docs):
 
 ```bash
-LORE_ASSET=lore-darwin-arm64
-LORE_BASE_URL=https://github.com/jarrod/lore/releases/latest/download
-LORE_REPO=/path/to/repository
-
-curl -fLO "$LORE_BASE_URL/$LORE_ASSET"
-curl -fLO "$LORE_BASE_URL/SHA256SUMS"
-grep "  ${LORE_ASSET}$" SHA256SUMS | shasum -a 256 -c -
-
-chmod +x "$LORE_ASSET"
-"./$LORE_ASSET" init --repo "$LORE_REPO"
-"$LORE_REPO/.lore/bin/lore" --help
+npx skills@latest add jarrod/lore --skill setup-lore --skill use-lore
 ```
 
-The checksum command must report `OK`. Early Lore releases are not code-signed or notarised. If macOS blocks the verified executable, open **System Settings → Privacy & Security** and choose **Open Anyway** for Lore.
+Choose the coding agents you use, such as Codex or Claude Code. The skill installer currently requires Node.js 22.20 or newer and npm; Lore itself runs as a standalone executable.
 
-### Linux
+Then ask your agent:
 
-Run these commands in a shell. The example selects Intel/AMD x64; change `LORE_ASSET` to `lore-linux-arm64` on an ARM64 machine.
+> Use setup-lore to install Lore in this repository.
+
+The agent selects the correct release for your operating system, verifies its checksum, and runs Lore's built-in setup. Existing knowledge is preserved. To upgrade later, ask setup-lore to upgrade Lore.
+
+Once installed, ask:
+
+> Use use-lore to inspect my knowledge bundle.
+
+Or:
+
+> Use use-lore to store this decision and relate it to the existing project knowledge.
+
+`use-lore` handles storage and retrieval. You or your own knowledge-worker skill choose how content is extracted, written, and organized.
+
+### Manual installation
+
+Download the executable for your platform and `SHA256SUMS` from [GitHub Releases](https://github.com/jarrod/lore/releases/latest). Verify the executable's SHA-256 checksum, give it execute permission on macOS/Linux, and run it from your repository:
 
 ```bash
-LORE_ASSET=lore-linux-x64
-LORE_BASE_URL=https://github.com/jarrod/lore/releases/latest/download
-LORE_REPO=/path/to/repository
-
-curl -fLO "$LORE_BASE_URL/$LORE_ASSET"
-curl -fLO "$LORE_BASE_URL/SHA256SUMS"
-grep "  ${LORE_ASSET}$" SHA256SUMS | sha256sum -c -
-
-chmod +x "$LORE_ASSET"
-"./$LORE_ASSET" init --repo "$LORE_REPO"
-"$LORE_REPO/.lore/bin/lore" --help
+/path/to/downloaded/lore init
+./.lore/bin/lore info
 ```
 
-The checksum command must report `OK`.
+On Windows, use the `lore-windows-x64.exe` asset and `.lore\bin\lore.exe`. Supported platforms are macOS ARM64/x64, Linux ARM64/x64, and Windows x64. Releases are currently unsigned and not notarised.
 
-### Windows
-
-Run these commands in PowerShell:
-
-```powershell
-$asset = "lore-windows-x64.exe"
-$baseUrl = "https://github.com/jarrod/lore/releases/latest/download"
-$repo = "C:\path\to\repository"
-
-Invoke-WebRequest "$baseUrl/$asset" -OutFile $asset
-Invoke-WebRequest "$baseUrl/SHA256SUMS" -OutFile "SHA256SUMS"
-
-$checksumLine = Get-Content "SHA256SUMS" | Where-Object { $_.EndsWith("  $asset") }
-if (-not $checksumLine) { throw "Checksum for $asset was not found" }
-$expected = ($checksumLine -split "\s+")[0]
-$actual = (Get-FileHash $asset -Algorithm SHA256).Hash
-if ($actual -ne $expected) { throw "Lore checksum verification failed" }
-
-& ".\$asset" init --repo $repo
-& "$repo\.lore\bin\lore.exe" --help
-```
-
-The hash comparison produces no output when it succeeds; a mismatch stops installation. Early Lore releases are not code-signed. If Windows blocks the verified executable, run `Unblock-File ".\$asset"` before initialization.
-
-`lore init` installs the executable into the selected repository and creates `.lore/knowledge`, `.lore/cache`, and `.lore/.gitignore`. It also configures `.lore/visualisations` as ignored derived output. It preserves existing knowledge and is safe to repeat. For a repeatable version-pinned installation, replace `releases/latest/download` with `releases/download/v0.1.0`, using the required release tag. To upgrade Lore, download the newer executable and run `init` against the repository again.
+The local-first defaults described below require the forthcoming release containing this change. The published `v0.1.0` binary requires `--bundle .lore/knowledge`; setup checks the installed version's help before verification.
 
 ## Commands
 
@@ -105,28 +62,33 @@ lore graph <concept-id> [--direction in|out|both] [--depth 1..8] [--rel R] [--to
 lore visualise [<concept-id>] [--direction in|out|both] [--depth 1..8] [--rel R] [--max-nodes 1..1000] [--output PATH] [--open]
 lore put <concept-id> < request.json
 lore status <concept-id> <status> [--expected-hash HASH]
-lore reset --knowledge --bundle PATH [--no-backup] [--confirm TOKEN]
+lore reset --knowledge [--bundle PATH] [--no-backup] [--confirm TOKEN]
 lore check [--strict]
 ```
 
 Help is returned as a successful, machine-readable JSON response and does not require a resolvable bundle. `lore --version` is the sole plain-text exception and prints only the version number. Lore refuses every command unless it is running as a compiled standalone executable; invoking the TypeScript source returns an unsupported-capability error.
 
-Every knowledge command operates on one bundle. Resolution order is `--bundle`, `OKF_BUNDLE`, then the current directory. Lore never walks parent directories.
+Every knowledge command defaults to `.lore/knowledge` beside the installed executable, even when called from another working directory. A binary outside `.lore/bin` uses `.lore/knowledge` in the current directory. Lore never searches parent directories or treats the source repository itself as a knowledge bundle.
 
-`OKF_BUNDLE` is optional. It is only a shortcut for selecting a bundle without repeating `--bundle`; it does not control where Lore stores knowledge. For ordinary software repositories, do not use the repository root as the bundle because unrelated Markdown files such as `README.md` are not OKF concepts.
-
-`find` searches concept IDs, titles, descriptions, tags, and semantic text derived from Markdown bodies. Searchable body text includes visible link labels, image descriptions, tables, and code while excluding link destinations and Markdown or raw-HTML markup. Multi-term searches rank concepts matching every term first, then fill unused result slots with broader any-term matches. `get` preserves raw frontmatter and also reports derived trust and `effective_status`; an absent status is effectively `stable`. With `graph --to`, explicit direction and depth options constrain the shortest path, while an omitted path depth defaults to 8.
+Use `--bundle PATH` to select another bundle. Caches are stored outside the bundle: standard local knowledge uses `.lore/cache`; other bundles use a sibling `.lore/cache` directory, with a separate hashed index for each bundle.
 
 Success is compact JSON on stdout:
 
 ```json
-{"ok":true,"data":{}}
+{ "ok": true, "data": {} }
 ```
 
 Failures are compact JSON on stderr:
 
 ```json
-{"ok":false,"error":{"code":"CONCEPT_NOT_FOUND","message":"Concept does not exist","details":{"id":"missing-concept"}}}
+{
+  "ok": false,
+  "error": {
+    "code": "CONCEPT_NOT_FOUND",
+    "message": "Concept does not exist",
+    "details": { "id": "missing-concept" }
+  }
+}
 ```
 
 Exit codes are `0` success, `2` invalid arguments, `3` invalid OKF, `4` not found, `5` mutation conflict, `6` unsupported capability, and `10` internal error. Validation warnings exit successfully unless `check --strict` is used.
@@ -171,7 +133,7 @@ Bundles may store an evolving ontology as ordinary concepts. That ontology remai
 ```json
 {
   "mode": "merge",
-  "frontmatter": {"type": "Concept", "title": "Example"},
+  "frontmatter": { "type": "Concept", "title": "Example" },
   "body_file": "/tmp/example.md",
   "relations": [["related_to", "another-concept"]],
   "expected_hash": "optional-hash-from-get"
@@ -195,24 +157,22 @@ The command accepts the OKF lifecycle values `draft`, `stable`, and `deprecated`
 `reset --knowledge` clears the complete authoritative bundle while preserving the installed Lore executable. Reset is recoverable and requires a state-derived confirmation token. First preview the exact bundle that would be reset:
 
 ```bash
-lore reset --knowledge --bundle .lore/knowledge
+lore reset --knowledge
 ```
 
 The successful JSON response reports the canonical bundle path, concept and file counts, byte count, and `confirmation_token`. The preview does not modify any files. To perform the reset, pass that token back unchanged:
 
 ```bash
-lore reset --knowledge --confirm TOKEN --bundle .lore/knowledge
+lore reset --knowledge --confirm TOKEN
 ```
 
 Lore rejects a stale or incorrect token with exit code 5. A confirmed reset moves the complete previous bundle to `.lore/backups/knowledge-<timestamp>-<token-prefix>`, creates a fresh empty bundle, and deletes and rebuilds the derived SQLite database, including its WAL and SHM files. The response reports the backup path and removed counts. Repository-local `init` configuration ignores `.lore/backups/` so recoverable copies are not committed accidentally.
 
-For safety, reset always requires an explicit `--bundle`. It does not use `OKF_BUNDLE` or the current-directory fallback accepted by other knowledge commands.
-
 To permanently reset without retaining a backup, include `--no-backup` in both the preview and confirmed commands:
 
 ```bash
-lore reset --knowledge --no-backup --bundle .lore/knowledge
-lore reset --knowledge --no-backup --confirm TOKEN --bundle .lore/knowledge
+lore reset --knowledge --no-backup
+lore reset --knowledge --no-backup --confirm TOKEN
 ```
 
 The confirmation token is bound to the selected reset mode. A token from a recoverable preview cannot authorize `--no-backup`, and vice versa. The permanent response reports `mode: "permanent"` and `recoverable: false`; the removed knowledge cannot be restored by Lore.
@@ -252,41 +212,19 @@ Consumers should provide their own knowledge-worker skill or workflow when they 
 consumer knowledge-worker policy -> use-lore -> Lore binary -> portable OKF bundle
 ```
 
-Install the whole `skills/use-lore` directory into the target agent's skill search path, either by copying it or linking back to this checkout. For example:
-
-```bash
-cp -R skills/use-lore /path/to/agent/skills/use-lore
-```
-
-The skill and executable are separate deliverables. The skill uses only the repository-local executable installed by `init`: `.lore/bin/lore` on macOS or Linux and `.lore/bin/lore.exe` on Windows. It never invokes the TypeScript source, Bun, Node.js, npm, package scripts, a compiler, `LORE_BIN`, or a globally installed executable.
-
-### Repository-local setup
-
-The skill does not download or install executables. Download and verify Lore using the platform instructions above, then initialize the target repository before using the skill:
-
-```bash
-/path/to/downloaded/lore init --repo /path/to/repository
-```
-
-Initialization creates:
+Install `setup-lore` and `use-lore` using the skills.sh command at the top of this page. Setup installs the binary and creates:
 
 ```text
 <repository>/.lore/
-├── bin/lore          # repository-local executable; lore.exe on Windows
+├── bin/lore          # lore.exe on Windows
 ├── cache/            # disposable SQLite state
-├── knowledge/        # authoritative, portable OKF Markdown; initially empty
-├── backups/          # recoverable pre-reset bundles, created on demand
-├── visualisations/   # disposable HTML graphs, created on demand
-└── .gitignore        # ignores bin/, cache/, backups/, and visualisations/
+├── knowledge/        # authoritative OKF Markdown
+├── backups/          # recoverable resets, created on demand
+├── visualisations/   # generated graphs, created on demand
+└── .gitignore        # ignores generated files, preserves knowledge
 ```
 
-The agent selects the platform-specific repository-local executable, sets `OKF_CACHE_DIR` to `<repository>/.lore/cache` in the command environment, and invokes it with an explicit bundle:
-
-```text
-<lore-executable> info --bundle <repository>/.lore/knowledge
-```
-
-The project-local `.lore/knowledge` convention removes the need to set `OKF_BUNDLE`. Keep `OKF_BUNDLE` only when intentionally pointing Lore at an external or shared bundle.
+Use `./.lore/bin/lore info` from the repository root, or call the installed executable by its absolute path from elsewhere.
 
 ## Contributing and support
 

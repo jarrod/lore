@@ -11,10 +11,20 @@ const targets = [
 
 mkdirSync("dist", { recursive: true });
 for (const [target, filename] of targets) {
-  const child = Bun.spawnSync([
-    "bun", "build", "./src/cli.ts", "--compile", "--no-compile-autoload-dotenv", "--no-compile-autoload-bunfig",
-    "--define", "__LORE_COMPILED__=true",
-    `--target=${target}`, `--outfile=${path.join("dist", filename)}`,
-  ], { stdout: "inherit", stderr: "inherit" });
+  const child = Bun.spawnSync(
+    [
+      "bun",
+      "build",
+      "./src/cli.ts",
+      "--compile",
+      "--no-compile-autoload-dotenv",
+      "--no-compile-autoload-bunfig",
+      "--define",
+      "__LORE_COMPILED__=true",
+      `--target=${target}`,
+      `--outfile=${path.join("dist", filename)}`,
+    ],
+    { stdout: "inherit", stderr: "inherit" },
+  );
   if (child.exitCode !== 0) process.exit(child.exitCode);
 }

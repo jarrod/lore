@@ -39,14 +39,18 @@ export function runInit(args: string[]): unknown {
 function resolveRepository(input?: string): string {
   const candidate = path.resolve(input ?? process.cwd());
   if (!existsSync(candidate)) {
-    throw notFound("REPOSITORY_NOT_FOUND", "Repository directory does not exist", { path: candidate });
+    throw notFound("REPOSITORY_NOT_FOUND", "Repository directory does not exist", {
+      path: candidate,
+    });
   }
   try {
     const resolved = realpathSync(candidate);
     if (!statSync(resolved).isDirectory()) throw new Error("not a directory");
     return resolved;
   } catch {
-    throw notFound("REPOSITORY_NOT_FOUND", "Repository is not an accessible directory", { path: candidate });
+    throw notFound("REPOSITORY_NOT_FOUND", "Repository is not an accessible directory", {
+      path: candidate,
+    });
   }
 }
 
@@ -68,7 +72,12 @@ function installSelf(destination: string): boolean {
 function sameFile(source: string, destination: string): boolean {
   const sourceStat = statSync(source);
   const destinationStat = statSync(destination);
-  if (sourceStat.ino !== 0 && sourceStat.dev === destinationStat.dev && sourceStat.ino === destinationStat.ino) return true;
+  if (
+    sourceStat.ino !== 0 &&
+    sourceStat.dev === destinationStat.dev &&
+    sourceStat.ino === destinationStat.ino
+  )
+    return true;
   const sourcePath = realpathSync(source);
   const destinationPath = realpathSync(destination);
   return process.platform === "win32"
