@@ -45,7 +45,7 @@ Download the executable for your platform and `SHA256SUMS` from [GitHub Releases
 
 On Windows, use the `lore-windows-x64.exe` asset and `.lore\bin\lore.exe`. Supported platforms are macOS ARM64/x64, Linux ARM64/x64, and Windows x64. Releases are currently unsigned and not notarised.
 
-The local-first defaults described below require the forthcoming release containing this change. The published `v0.1.0` binary requires `--bundle .lore/knowledge`; setup checks the installed version's help before verification.
+The local-first defaults described below are available from `v0.2.0`. Older `v0.1.0` binaries require `--bundle .lore/knowledge`; setup checks the installed version's help before verification.
 
 ## Commands
 
@@ -237,8 +237,8 @@ Pull requests and pushes to `main` run the dependency audit, tests, type checkin
 To publish the version declared in `package.json`, create and push the matching tag from a commit contained in `main`:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 The release workflow builds and smoke-tests Linux x64/ARM64, macOS Intel/ARM64, and Windows x64 binaries on matching GitHub-hosted runners. It publishes those five binaries and `SHA256SUMS` to the resulting GitHub Release.
