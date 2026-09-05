@@ -49,7 +49,8 @@ try {
   const version = Bun.spawnSync([binary, "--version"], { stdout: "pipe", stderr: "pipe" });
   if (
     version.exitCode !== 0 ||
-    version.stdout.toString() !== "0.1.0\n" ||
+    version.stdout.toString() !==
+      `${(await Bun.file(path.join(project, "package.json")).json()).version}\n` ||
     version.stderr.length !== 0
   ) {
     throw new Error("--version did not print only the expected version");
