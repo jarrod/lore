@@ -2,7 +2,7 @@ import { invalidOkf } from "../protocol/errors";
 
 export type Frontmatter = Record<string, unknown>;
 export const OKF_STATUSES = ["draft", "stable", "deprecated"] as const;
-export type OkfStatus = typeof OKF_STATUSES[number];
+export type OkfStatus = (typeof OKF_STATUSES)[number];
 
 export interface ParsedDocument {
   frontmatter: Frontmatter;
@@ -38,7 +38,8 @@ export function serializeDocument(frontmatter: Frontmatter, body: string): strin
 }
 
 function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((entry) => entry === undefined ? null : stableValue(entry));
+  if (Array.isArray(value))
+    return value.map((entry) => (entry === undefined ? null : stableValue(entry)));
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
@@ -107,20 +108,30 @@ export function effectiveStatus(frontmatter: Frontmatter): string {
   return typeof frontmatter.status === "string" ? frontmatter.status : "stable";
 }
 
-export function trustTier(frontmatter: Frontmatter): "unverified" | "machine_confirmed" | "human_reviewed" {
+export function trustTier(
+  frontmatter: Frontmatter,
+): "unverified" | "machine_confirmed" | "human_reviewed" {
   const raw = frontmatter.verified;
   if (raw === undefined) return "unverified";
   const entries = Array.isArray(raw) ? raw : [raw];
   const verifiers = entries.flatMap((entry) => {
-    const by = entry && typeof entry === "object" ? (entry as Record<string, unknown>).by : undefined;
+    const by =
+      entry && typeof entry === "object" ? (entry as Record<string, unknown>).by : undefined;
     return typeof by === "string" && by.trim() ? [by] : [];
   });
   if (!verifiers.length) return "unverified";
   return verifiers.some((by) => by.startsWith("human:")) ? "human_reviewed" : "machine_confirmed";
 }
 
-export function isStale(frontmatter: Frontmatter, today = new Date().toISOString().slice(0, 10)): boolean {
-  return typeof frontmatter.stale_after === "string" && isOkfDate(frontmatter.stale_after) && today >= frontmatter.stale_after;
+export function isStale(
+  frontmatter: Frontmatter,
+  today = new Date().toISOString().slice(0, 10),
+): boolean {
+  return (
+    typeof frontmatter.stale_after === "string" &&
+    isOkfDate(frontmatter.stale_after) &&
+    today >= frontmatter.stale_after
+  );
 }
 
 export function isOkfDate(value: string): boolean {

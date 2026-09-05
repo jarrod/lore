@@ -56,7 +56,11 @@ export async function runReset(bundle: string, args: string[]): Promise<unknown>
   try {
     mkdirSync(bundle);
     const { db } = openDatabase(bundle, true);
-    try { await refreshIndex(db, bundle); } finally { db.close(); }
+    try {
+      await refreshIndex(db, bundle);
+    } finally {
+      db.close();
+    }
     if (noBackup) rmSync(previousBundle, { recursive: true });
   } catch (error) {
     if (existsSync(bundle)) rmSync(bundle, { recursive: true, force: true });
@@ -116,7 +120,8 @@ function bundleEntries(bundle: string): string[] {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       entries.push(relative);
-      if (entry.isDirectory() && !entry.isSymbolicLink()) visit(path.join(directory, entry.name), relative);
+      if (entry.isDirectory() && !entry.isSymbolicLink())
+        visit(path.join(directory, entry.name), relative);
     }
   };
   visit(bundle, "");
@@ -130,11 +135,16 @@ function isConceptPath(relative: string): boolean {
 
 function backupPath(bundle: string, token: string): string {
   const parent = path.dirname(bundle);
-  const standardRepositoryBundle = path.basename(parent) === ".lore" && path.basename(bundle) === "knowledge";
+  const standardRepositoryBundle =
+    path.basename(parent) === ".lore" && path.basename(bundle) === "knowledge";
   const backupRoot = standardRepositoryBundle ? path.join(parent, "backups") : `${bundle}.backups`;
   const timestamp = new Date().toISOString().replace(/[-:.]/g, "").replace("Z", "Z");
-  const destination = path.join(backupRoot, `${path.basename(bundle)}-${timestamp}-${token.slice(0, 12)}`);
-  if (existsSync(destination)) throw conflict("Knowledge backup already exists", { backup: destination });
+  const destination = path.join(
+    backupRoot,
+    `${path.basename(bundle)}-${timestamp}-${token.slice(0, 12)}`,
+  );
+  if (existsSync(destination))
+    throw conflict("Knowledge backup already exists", { backup: destination });
   return destination;
 }
 
@@ -143,6 +153,7 @@ function discardedBundlePath(bundle: string, token: string): string {
     path.dirname(bundle),
     `.lore-reset-${path.basename(bundle)}-${process.pid}-${token.slice(0, 12)}`,
   );
-  if (existsSync(destination)) throw conflict("Temporary reset path already exists", { path: destination });
+  if (existsSync(destination))
+    throw conflict("Temporary reset path already exists", { path: destination });
   return destination;
 }

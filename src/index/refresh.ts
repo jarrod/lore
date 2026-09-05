@@ -14,8 +14,14 @@ export interface RefreshResult {
 }
 
 export async function refreshIndex(db: Database, bundle: string): Promise<RefreshResult> {
-  const previousRows = db.query("SELECT id, path, hash, mtime_ms, size_bytes FROM concept").all() as Array<{
-    id: string; path: string; hash: string; mtime_ms: number; size_bytes: number;
+  const previousRows = db
+    .query("SELECT id, path, hash, mtime_ms, size_bytes FROM concept")
+    .all() as Array<{
+    id: string;
+    path: string;
+    hash: string;
+    mtime_ms: number;
+    size_bytes: number;
   }>;
   const previous = new Map(previousRows.map((row) => [row.path, row]));
   const seen = new Set<string>();
@@ -25,7 +31,12 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
   let updated = 0;
   let unchanged = 0;
   const glob = new Bun.Glob("**/*.md");
-  for await (const rawRelative of glob.scan({ cwd: bundle, dot: false, onlyFiles: true, followSymlinks: false })) {
+  for await (const rawRelative of glob.scan({
+    cwd: bundle,
+    dot: false,
+    onlyFiles: true,
+    followSymlinks: false,
+  })) {
     const relative = rawRelative.split(path.sep).join("/");
     const parts = relative.split("/");
     if (parts.some((part) => part.startsWith("."))) continue;
@@ -35,17 +46,23 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
     const prior = previous.get(relative);
     const concept = await loadConcept(bundle, relative);
     if (prior && prior.hash === concept.hash) {
-      unchangedMetadata.push({ id: concept.id, mtimeMs: concept.mtimeMs, sizeBytes: concept.sizeBytes });
+      unchangedMetadata.push({
+        id: concept.id,
+        mtimeMs: concept.mtimeMs,
+        sizeBytes: concept.sizeBytes,
+      });
       unchanged++;
       continue;
     }
     changed.push(concept);
-    if (prior) updated++; else added++;
+    if (prior) updated++;
+    else added++;
   }
   const deletedRows = previousRows.filter((row) => !seen.has(row.path));
   const transaction = db.transaction(() => {
     const updateMetadata = db.query("UPDATE concept SET mtime_ms=?, size_bytes=? WHERE id=?");
-    for (const concept of unchangedMetadata) updateMetadata.run(concept.mtimeMs, concept.sizeBytes, concept.id);
+    for (const concept of unchangedMetadata)
+      updateMetadata.run(concept.mtimeMs, concept.sizeBytes, concept.id);
     for (const row of deletedRows) {
       db.query("DELETE FROM edge WHERE src=?").run(row.id);
       db.query("DELETE FROM concept_fts WHERE id=?").run(row.id);
@@ -70,18 +87,31 @@ export async function refreshIndex(db: Database, bundle: string): Promise<Refres
         concept.mtimeMs,
         concept.sizeBytes,
       );
-      const tags = Array.isArray(concept.frontmatter.tags) ? concept.frontmatter.tags.filter((tag): tag is string => typeof tag === "string").join(" ") : "";
-      db.query("INSERT INTO concept_fts(id,title,description,tags,search_text) VALUES (?,?,?,?,?)").run(
-        concept.id, stringOrNull(concept.frontmatter.title), stringOrNull(concept.frontmatter.description), tags,
+      const tags = Array.isArray(concept.frontmatter.tags)
+        ? concept.frontmatter.tags.filter((tag): tag is string => typeof tag === "string").join(" ")
+        : "";
+      db.query(
+        "INSERT INTO concept_fts(id,title,description,tags,search_text) VALUES (?,?,?,?,?)",
+      ).run(
+        concept.id,
+        stringOrNull(concept.frontmatter.title),
+        stringOrNull(concept.frontmatter.description),
+        tags,
         searchableMarkdownText(concept.body),
       );
-      const insertEdge = db.query("INSERT OR IGNORE INTO edge(src,rel,dst,origin) VALUES (?,?,?,?)");
+      const insertEdge = db.query(
+        "INSERT OR IGNORE INTO edge(src,rel,dst,origin) VALUES (?,?,?,?)",
+      );
       for (const edge of concept.edges) insertEdge.run(concept.id, edge.rel, edge.dst, edge.origin);
     }
-    db.query("INSERT INTO meta(key,value) VALUES ('last_indexed',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(new Date().toISOString());
+    db.query(
+      "INSERT INTO meta(key,value) VALUES ('last_indexed',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+    ).run(new Date().toISOString());
   });
   transaction();
-  const counts = db.query("SELECT (SELECT count(*) FROM concept) concepts, (SELECT count(*) FROM edge) edges").get() as { concepts: number; edges: number };
+  const counts = db
+    .query("SELECT (SELECT count(*) FROM concept) concepts, (SELECT count(*) FROM edge) edges")
+    .get() as { concepts: number; edges: number };
   return { ...counts, added, updated, deleted: deletedRows.length, unchanged };
 }
 

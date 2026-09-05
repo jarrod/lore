@@ -1,7 +1,7 @@
 import { existsSync, realpathSync, statSync } from "node:fs";
 import { mkdir, rename, unlink } from "node:fs/promises";
 import path from "node:path";
-import { openDatabase } from "../index/database";
+import { cachePath, openDatabase } from "../index/database";
 import { bundleGraph, graphTraversal, type Direction } from "../index/graph";
 import { refreshIndex } from "../index/refresh";
 import { validateConceptId } from "../okf/ids";
@@ -26,10 +26,13 @@ export async function runVisualise(bundle: string, args: string[]): Promise<unkn
     throw invalidArgument("--direction and --depth require a root concept ID");
   }
   const direction = (directionRaw ?? "both") as Direction;
-  if (!(["in", "out", "both"] as string[]).includes(direction)) throw invalidArgument("Invalid graph direction", { direction });
+  if (!(["in", "out", "both"] as string[]).includes(direction))
+    throw invalidArgument("Invalid graph direction", { direction });
   const depth = depthRaw === undefined ? 1 : Number(depthRaw);
-  if (!Number.isInteger(depth) || depth < 1 || depth > 8) throw invalidArgument("--depth must be between 1 and 8");
-  if (rel && !/^[a-z][a-z0-9_]*$/.test(rel)) throw invalidArgument("Invalid relationship filter", { rel });
+  if (!Number.isInteger(depth) || depth < 1 || depth > 8)
+    throw invalidArgument("--depth must be between 1 and 8");
+  if (rel && !/^[a-z][a-z0-9_]*$/.test(rel))
+    throw invalidArgument("Invalid relationship filter", { rel });
   const maxNodes = maxNodesRaw === undefined ? DEFAULT_MAX_NODES : Number(maxNodesRaw);
   if (!Number.isInteger(maxNodes) || maxNodes < 1 || maxNodes > MAX_MAX_NODES) {
     throw invalidArgument(`--max-nodes must be between 1 and ${MAX_MAX_NODES}`);
@@ -47,12 +50,21 @@ export async function runVisualise(bundle: string, args: string[]): Promise<unkn
     db.close();
   }
   if (graph.nodes.length > maxNodes) {
-    throw graphTooLarge({ nodes: graph.nodes.length, limit: maxNodes, root: root ?? null, max_supported: MAX_MAX_NODES });
+    throw graphTooLarge({
+      nodes: graph.nodes.length,
+      limit: maxNodes,
+      root: root ?? null,
+      max_supported: MAX_MAX_NODES,
+    });
   }
 
   const requestedOutput = outputRaw
     ? path.resolve(process.cwd(), outputRaw)
-    : path.join(process.cwd(), ".lore", "visualisations", root ? `${safeFilename(root)}-graph.html` : "knowledge-graph.html");
+    : path.join(
+        path.dirname(path.dirname(path.dirname(cachePath(bundle)))),
+        "visualisations",
+        root ? `${safeFilename(root)}-graph.html` : "knowledge-graph.html",
+      );
   const output = await prepareOutput(bundle, requestedOutput);
   await writeAtomically(output, renderVisualisation({ ...graph, ...(root ? { root } : {}) }));
   if (shouldOpen) await openInBrowser(output);
@@ -68,24 +80,40 @@ export async function runVisualise(bundle: string, args: string[]): Promise<unkn
 }
 
 export function safeFilename(id: string): string {
-  return id.replaceAll("/", "-").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "concept";
+  return (
+    id
+      .replaceAll("/", "-")
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "concept"
+  );
 }
 
-export function browserCommand(file: string, platform: NodeJS.Platform = process.platform): string[] {
+export function browserCommand(
+  file: string,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
   if (platform === "darwin") return ["open", file];
   if (platform === "win32") return ["cmd", "/c", "start", "", file];
   if (platform === "linux") return ["xdg-open", file];
-  throw new LoreError("OPEN_FAILED", "No browser launcher is available for this platform", EXIT.unsupported, { path: file, platform });
+  throw new LoreError(
+    "OPEN_FAILED",
+    "No browser launcher is available for this platform",
+    EXIT.unsupported,
+    { path: file, platform },
+  );
 }
 
 async function prepareOutput(bundle: string, requested: string): Promise<string> {
-  if (existsSync(requested) && statSync(requested).isDirectory()) throw invalidArgument("--output must name a file", { path: requested });
+  if (existsSync(requested) && statSync(requested).isDirectory())
+    throw invalidArgument("--output must name a file", { path: requested });
   const missingSegments: string[] = [];
   let existingAncestor = path.dirname(requested);
   while (!existsSync(existingAncestor)) {
     missingSegments.unshift(path.basename(existingAncestor));
     const next = path.dirname(existingAncestor);
-    if (next === existingAncestor) throw invalidArgument("Visualisation output has no accessible parent", { path: requested });
+    if (next === existingAncestor)
+      throw invalidArgument("Visualisation output has no accessible parent", { path: requested });
     existingAncestor = next;
   }
   // Use the same synchronous canonicalizer as bundle resolution so Windows
@@ -99,8 +127,14 @@ async function prepareOutput(bundle: string, requested: string): Promise<string>
 
 function assertOutsideBundle(bundle: string, output: string): void {
   const relative = path.relative(bundle, output);
-  if (relative === "" || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`))) {
-    throw invalidArgument("Visualisation output must be outside the authoritative bundle", { path: output, bundle });
+  if (
+    relative === "" ||
+    (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`))
+  ) {
+    throw invalidArgument("Visualisation output must be outside the authoritative bundle", {
+      path: output,
+      bundle,
+    });
   }
 }
 
@@ -146,9 +180,14 @@ async function openInBrowser(file: string): Promise<void> {
     }
   } catch (error) {
     if (error instanceof LoreError) throw error;
-    throw new LoreError("OPEN_FAILED", "Visualisation was generated but could not be opened", EXIT.unsupported, {
-      path: file,
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    throw new LoreError(
+      "OPEN_FAILED",
+      "Visualisation was generated but could not be opened",
+      EXIT.unsupported,
+      {
+        path: file,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    );
   }
 }

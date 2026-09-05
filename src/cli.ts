@@ -29,23 +29,32 @@ async function main(): Promise<void> {
     if (parsed.bundle) throw invalidArgument("--bundle is not valid for init");
     return writeSuccess(runInit(parsed.args));
   }
-  if (command === "reset" && !parsed.bundle) throw invalidArgument("reset requires an explicit --bundle path");
   const bundle = resolveBundle(parsed.bundle);
   switch (command) {
-    case "info": return writeSuccess(await runInfo(bundle, parsed.args));
-    case "index": return writeSuccess(await runIndex(bundle, parsed.args));
-    case "find": return writeSuccess(await runFind(bundle, parsed.args));
-    case "get": return writeSuccess(await runGet(bundle, parsed.args));
-    case "graph": return writeSuccess(await runGraph(bundle, parsed.args));
-    case "visualise": return writeSuccess(await runVisualise(bundle, parsed.args));
-    case "put": return writeSuccess(await runPut(bundle, parsed.args));
-    case "status": return writeSuccess(await runStatus(bundle, parsed.args));
-    case "reset": return writeSuccess(await runReset(bundle, parsed.args));
+    case "info":
+      return writeSuccess(await runInfo(bundle, parsed.args));
+    case "index":
+      return writeSuccess(await runIndex(bundle, parsed.args));
+    case "find":
+      return writeSuccess(await runFind(bundle, parsed.args));
+    case "get":
+      return writeSuccess(await runGet(bundle, parsed.args));
+    case "graph":
+      return writeSuccess(await runGraph(bundle, parsed.args));
+    case "visualise":
+      return writeSuccess(await runVisualise(bundle, parsed.args));
+    case "put":
+      return writeSuccess(await runPut(bundle, parsed.args));
+    case "status":
+      return writeSuccess(await runStatus(bundle, parsed.args));
+    case "reset":
+      return writeSuccess(await runReset(bundle, parsed.args));
     case "check": {
       const result = await runCheck(bundle, parsed.args);
       return writeSuccess(result.data, result.exitCode);
     }
-    default: throw invalidArgument("Unknown command", { command });
+    default:
+      throw invalidArgument("Unknown command", { command });
   }
 }
 

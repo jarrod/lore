@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { openDatabase } from "../src/index/database";
@@ -10,32 +18,36 @@ const bundleOption = takeOption(args, "--bundle");
 const iterationsOption = takeOption(args, "--iterations");
 if (args.length) throw new Error(`Unexpected argument: ${args[0]}`);
 
-const requestedBundle = path.resolve(bundleOption ?? path.join(project, "test", "fixtures", "graph"));
+const requestedBundle = path.resolve(
+  bundleOption ?? path.join(project, "test", "fixtures", "graph"),
+);
 if (!existsSync(requestedBundle) || !statSync(requestedBundle).isDirectory()) {
   throw new Error(`Profile bundle is not a directory: ${requestedBundle}`);
 }
-const bundle = realpathSync(requestedBundle);
-const iterations = iterationsOption === undefined ? (bundleOption ? 1 : 100) : Number(iterationsOption);
+const sourceBundle = realpathSync(requestedBundle);
+const iterations =
+  iterationsOption === undefined ? (bundleOption ? 1 : 100) : Number(iterationsOption);
 if (!Number.isInteger(iterations) || iterations < 1 || iterations > 1000) {
   throw new Error("--iterations must be an integer between 1 and 1000");
 }
 
 mkdirSync(path.join(project, "dist", "profiles"), { recursive: true });
 const cache = mkdtempSync(path.join(os.tmpdir(), "lore-index-profile-"));
-const previousCache = process.env.OKF_CACHE_DIR;
-process.env.OKF_CACHE_DIR = cache;
+const bundle = path.join(cache, "knowledge");
+cpSync(sourceBundle, bundle, { recursive: true });
 
 let result: RefreshResult | undefined;
 try {
   for (let iteration = 0; iteration < iterations; iteration++) {
     const { db } = openDatabase(bundle, true);
-    try { result = await refreshIndex(db, bundle); }
-    finally { db.close(); }
+    try {
+      result = await refreshIndex(db, bundle);
+    } finally {
+      db.close();
+    }
   }
   process.stdout.write(`${JSON.stringify({ bundle, iterations, result })}\n`);
 } finally {
-  if (previousCache === undefined) delete process.env.OKF_CACHE_DIR;
-  else process.env.OKF_CACHE_DIR = previousCache;
   rmSync(cache, { recursive: true, force: true });
 }
 
