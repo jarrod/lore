@@ -82,7 +82,9 @@ try {
     realpathSync(info.bundle) !== realpathSync(initData.data.bundle) ||
     realpathSync(path.dirname(path.dirname(info.cache.path))) !== realpathSync(initData.data.cache)
   ) {
-    throw new Error("installed binary did not use local knowledge and cache");
+    throw new Error(
+      `installed binary did not use local knowledge and cache: ${JSON.stringify({ info, initialized: initData.data })}`,
+    );
   }
   const preview = Bun.spawnSync([localBinary, "reset", "--knowledge"], {
     stdout: "pipe",
